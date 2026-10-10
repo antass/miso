@@ -1,0 +1,14 @@
+{
+  "port": 8137,
+  "library_folders": [
+    "~/Library/CloudStorage/GoogleDrive-anna.krentowicz@gmail.com/My Drive/AllBooks/eBooks/Cookbooks"
+  ],
+  "extensions": [
+    ".epub",
+    ".mobi",
+    ".azw3",
+    ".azw"
+  ],
+  "mixed_folders": [],
+  "min_recipes_mixed": 10
+}

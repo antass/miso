@@ -1,0 +1,7 @@
+# personal data (shopping list, plan, tags, ratings, saved recipes)
+data/
+# python
+__pycache__/
+*.pyc
+# macOS
+.DS_Store
