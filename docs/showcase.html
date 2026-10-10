@@ -1,0 +1,557 @@
+<title>Miso</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: a product page that opens on the working cook view; then search, sources, and how to get it — one column of sections, hero split in two on wide screens. */
+:root {
+  --paper: #FAF8F4;
+  --surface: #FFFFFF;
+  --sunk: #F1EDE6;
+  --ink: #1E1D1B;
+  --ink-2: #5E5A54;
+  --ink-3: #8C877F;
+  --line: #E4DED4;
+  --tomato: #C8452B;
+  --tomato-soft: #F6E2DB;
+  --current: #FFF2CC;
+  --current-line: #DB9A13;
+  --ok: #3F7D58;
+  --star: #C98A0B;
+  --display: "Newsreader", "Iowan Old Style", Georgia, serif;
+  --body: "Inter", -apple-system, system-ui, sans-serif;
+  --r: 12px;
+  --shadow: 0 1px 2px rgba(30, 29, 27, .06), 0 10px 30px rgba(30, 29, 27, .08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #161513; --surface: #1F1E1B; --sunk: #282521; --ink: #F1ECE4; --ink-2: #BAB3A8; --ink-3: #868075;
+    --line: #36322C; --tomato: #E8694C; --tomato-soft: #3B261F; --current: #3A3220; --current-line: #E3A21A;
+    --ok: #7FBF97; --star: #E0A021; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.35); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #161513; --surface: #1F1E1B; --sunk: #282521; --ink: #F1ECE4; --ink-2: #BAB3A8; --ink-3: #868075;
+  --line: #36322C; --tomato: #E8694C; --tomato-soft: #3B261F; --current: #3A3220; --current-line: #E3A21A;
+  --ok: #7FBF97; --star: #E0A021; --shadow: 0 1px 2px rgba(0,0,0,.35), 0 10px 30px rgba(0,0,0,.35); color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; }
+h1, h2, h3 { font-family: var(--display); font-weight: 500; letter-spacing: -.01em; margin: 0; text-wrap: balance; }
+p { margin: 0; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--tomato); outline-offset: 2px; }
+.eyebrow { font-size: .74rem; font-weight: 600; text-transform: uppercase; letter-spacing: .09em; color: var(--ink-3); }
+
+/* ---------- top ---------- */
+.top { display: flex; align-items: center; justify-content: space-between; padding-block: 18px; }
+.brand { font: 600 1.6rem/1 var(--display); color: var(--tomato); letter-spacing: -.02em; }
+.top a { color: var(--ink-2); font-size: .9rem; text-decoration: none; }
+.top a:hover { color: var(--ink); }
+
+/* ---------- hero ---------- */
+.hero { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.25fr); gap: 48px; align-items: start; padding-block: 28px 64px; }
+.pitch { padding-top: 24px; display: grid; gap: 18px; }
+.pitch h1 { font-size: clamp(2.4rem, 5vw, 3.6rem); line-height: 1.02; }
+.pitch h1 em { font-style: italic; color: var(--tomato); }
+.pitch .lede { font: 400 1.18rem/1.55 var(--display); color: var(--ink-2); max-width: 34ch; }
+.facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.facts span { font-size: .82rem; color: var(--ink-2); background: var(--sunk); padding: 5px 11px; border-radius: 999px; }
+.hint { font-size: .84rem; color: var(--ink-3); display: flex; gap: 8px; align-items: center; }
+.hint::before { content: ""; width: 18px; height: 1px; background: var(--ink-3); }
+@media (max-width: 900px) { .hero { grid-template-columns: 1fr; gap: 28px; } .pitch { padding-top: 0; } }
+
+/* ---------- demo recipe ---------- */
+.recipe { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow); padding: 22px; display: grid; gap: 16px; min-width: 0; }
+.r-head { display: flex; gap: 14px; align-items: flex-start; }
+.r-head .thumb { width: 44px; height: 62px; border-radius: 3px; flex: none; display: grid; place-items: center; text-align: center; padding: 4px;
+  background: linear-gradient(160deg, #2F4A3B, #1D3127); color: #EDE4D3; font: 600 .5rem/1.15 var(--display); box-shadow: 0 1px 4px rgba(0,0,0,.25); }
+.r-head h2 { font-size: 1.55rem; line-height: 1.12; }
+.r-head small { display: block; font-size: .78rem; color: var(--ink-3); margin-top: 4px; }
+.sample { font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--tomato); background: var(--tomato-soft); padding: 2px 7px; border-radius: 999px; margin-left: 6px; vertical-align: 3px; }
+.toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-block: 12px; border-block: 1px solid var(--line); }
+.toolbar .sep { flex: 1; }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: .85rem; font-weight: 500; }
+.btn:hover { border-color: var(--ink-3); }
+.btn.on { background: var(--tomato-soft); border-color: var(--tomato); color: var(--tomato); }
+.scale { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.scale button { height: 32px; padding: 0 11px; font-size: .82rem; font-weight: 500; color: var(--ink-2); }
+.scale button[aria-pressed="true"] { background: var(--ink); color: var(--paper); }
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 26px; }
+@media (max-width: 640px) { .cols { grid-template-columns: 1fr; } }
+.cols h3 { font-size: 1.1rem; margin-bottom: 6px; display: flex; gap: 8px; align-items: baseline; }
+.cols h3 small { font: 500 .74rem var(--body); color: var(--ink-3); }
+.ings { list-style: none; margin: 0; padding: 0; }
+.ings li { display: flex; gap: 10px; padding: 7px 2px; border-bottom: 1px solid var(--line); cursor: pointer; user-select: none; font-size: .9rem; }
+.ings .box { width: 18px; height: 18px; flex: none; border: 1.5px solid var(--ink-3); border-radius: 5px; margin-top: 2px; display: grid; place-items: center; }
+.ings li.done { color: var(--ink-3); }
+.ings li.done .t { text-decoration: line-through; }
+.ings li.done .box { background: var(--ok); border-color: var(--ok); }
+.ings li.done .box::after { content: ""; width: 4px; height: 9px; border: solid #fff; border-width: 0 2px 2px 0; transform: rotate(45deg) translate(-1px, -1px); }
+.q { font-weight: 600; }
+.steps { list-style: none; margin: 0; padding: 0; counter-reset: s; display: grid; gap: 2px; }
+.steps li { position: relative; padding: 10px 12px 10px 44px; border-radius: 10px; border-left: 3px solid transparent; cursor: pointer; font-size: .92rem; line-height: 1.55; transition: background .2s, opacity .2s; }
+.steps li::before { counter-increment: s; content: counter(s); position: absolute; left: 10px; top: 10px; width: 24px; height: 24px; border-radius: 50%; border: 1.5px solid var(--line); display: grid; place-items: center; font: 600 .75rem var(--body); color: var(--ink-2); }
+.steps li:hover { background: var(--sunk); }
+.steps li.cur { background: var(--current); border-left-color: var(--current-line); }
+.steps li.cur::before { background: var(--current-line); border-color: var(--current-line); color: #fff; }
+.steps li.past { opacity: .45; }
+.steps li.past::before { content: "✓"; background: var(--ok); border-color: var(--ok); color: #fff; }
+body.cooking .steps li { font-size: 1.04rem; }
+.tmr { display: inline-flex; gap: 3px; align-items: center; padding: 0 6px; border-radius: 6px; background: var(--tomato-soft); color: var(--tomato); font-weight: 600; font-size: .9em; white-space: nowrap; cursor: pointer; }
+.tmr:hover { background: var(--tomato); color: #fff; }
+.stepper { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: var(--ink); color: var(--paper); border-radius: 999px; padding: 5px; }
+.stepper button { height: 38px; padding: 0 16px; border-radius: 999px; font-weight: 600; font-size: .88rem; }
+.stepper button:hover { background: rgba(127,127,127,.25); }
+.stepper span { font-size: .84rem; opacity: .8; font-variant-numeric: tabular-nums; }
+.timers { display: flex; flex-wrap: wrap; gap: 8px; }
+.timer { display: inline-flex; align-items: center; gap: 10px; padding: 5px 6px 5px 12px; border-radius: 999px; background: var(--sunk); font-variant-numeric: tabular-nums; }
+.timer b { font-size: 1.02rem; min-width: 52px; }
+.timer small { font-size: .78rem; color: var(--ink-3); }
+.timer button { width: 26px; height: 26px; border-radius: 50%; font-size: .8rem; color: var(--ink-2); }
+.timer button:hover { background: var(--line); }
+.timer.ring { background: var(--tomato); color: #fff; }
+.timer.ring small, .timer.ring button { color: #fff; }
+.note { font-size: .82rem; color: var(--ink-3); }
+
+/* ---------- sections ---------- */
+section.block { padding-block: 56px; border-top: 1px solid var(--line); display: grid; gap: 26px; }
+.block-head { display: grid; gap: 8px; max-width: 62ch; }
+.block-head h2 { font-size: clamp(1.7rem, 3vw, 2.2rem); }
+.block-head p { color: var(--ink-2); font-size: 1rem; }
+
+/* features */
+.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+@media (max-width: 820px) { .features { grid-template-columns: 1fr; gap: 22px; } }
+.feature h3 { font-size: 1.25rem; margin-bottom: 8px; }
+.feature ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
+.feature li { color: var(--ink-2); font-size: .93rem; padding-left: 16px; position: relative; }
+.feature li::before { content: ""; position: absolute; left: 0; top: .62em; width: 6px; height: 6px; border-radius: 50%; background: var(--tomato); opacity: .7; }
+
+/* search demo */
+.search-demo { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; display: grid; gap: 14px; min-width: 0; }
+.sbox { position: relative; }
+.sbox input { width: 100%; height: 46px; border-radius: 999px; border: 1px solid var(--line); background: var(--paper); padding: 0 18px 0 42px; font: inherit; font-size: .98rem; color: var(--ink); outline: none; }
+.sbox input:focus { border-color: var(--ink-3); }
+.sbox svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--ink-3); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); font-size: .82rem; font-weight: 500; color: var(--ink-2); background: var(--surface); }
+.chip:hover { border-color: var(--ink-3); }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.chip-group { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip-group > span { font-size: .72rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-3); width: 74px; }
+.count { font-size: .86rem; color: var(--ink-3); }
+.count b { color: var(--ink); }
+.results { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.card { display: flex; gap: 12px; padding: 11px; border-radius: var(--r); border: 1px solid var(--line); background: var(--paper); min-width: 0; }
+.card .thumb { width: 52px; height: 52px; border-radius: 8px; flex: none; display: grid; place-items: center; font: 600 1.25rem var(--display); color: #fff; }
+.card .body { min-width: 0; display: grid; gap: 3px; }
+.card h4 { margin: 0; font: 500 1rem/1.25 var(--display); }
+.card .src { font-size: .76rem; color: var(--ink-3); }
+.card .meta { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: .74rem; color: var(--ink-2); }
+.stars { color: var(--star); font-weight: 600; }
+.tag { font-size: .7rem; font-weight: 600; padding: 1px 7px; border-radius: 999px; background: var(--tomato-soft); color: var(--tomato); }
+.empty { color: var(--ink-3); font-size: .9rem; padding: 10px 0; }
+
+/* sources */
+.sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.source { padding: 18px; border-radius: var(--r); background: var(--sunk); display: grid; gap: 6px; align-content: start; }
+.source b { font: 500 1.08rem var(--display); }
+.source p { font-size: .88rem; color: var(--ink-2); }
+
+/* get it */
+.getit { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+@media (max-width: 820px) { .getit { grid-template-columns: 1fr; gap: 24px; } }
+.needs { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.needs li { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 12px; font-size: .92rem; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.needs li b { font-weight: 600; }
+.needs li span { color: var(--ink-2); }
+@media (max-width: 480px) { .needs li { grid-template-columns: 1fr; gap: 2px; } }
+.how { counter-reset: h; list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.how li { counter-increment: h; display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 12px; font-size: .93rem; color: var(--ink-2); }
+.how li::before { content: counter(h); width: 28px; height: 28px; border-radius: 50%; background: var(--tomato); color: #fff; display: grid; place-items: center; font: 600 .82rem var(--body); }
+.how li b { color: var(--ink); font-weight: 600; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .84em; background: var(--sunk); padding: 1px 6px; border-radius: 5px; overflow-wrap: anywhere; }
+.privacy { margin-top: 6px; padding: 14px 16px; border-left: 3px solid var(--ok); background: var(--sunk); border-radius: 0 10px 10px 0; font-size: .9rem; color: var(--ink-2); }
+footer { padding-block: 36px 48px; border-top: 1px solid var(--line); color: var(--ink-3); font-size: .84rem; display: flex; flex-wrap: wrap; gap: 8px 20px; justify-content: space-between; }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <span class="brand">Miso</span>
+    <a href="#get">How to get it</a>
+  </header>
+
+  <section class="hero">
+    <div class="pitch">
+      <span class="eyebrow">A cookbook app for your Mac</span>
+      <h1>Every cookbook you own, <em>searchable</em> in one place.</h1>
+      <p class="lede">Miso reads the ebooks you already have, pulls out each recipe, and gives you a calm screen to cook from — with the book's cover right there so you know where it came from.</p>
+      <div class="facts"><span>EPUB &amp; MOBI</span><span>NYT Cooking</span><span>EatingWell</span><span>Works on iPad</span><span>Runs on your Mac</span></div>
+      <p class="hint">Try the recipe — tap ingredients, steps and the times</p>
+    </div>
+
+    <article class="recipe" aria-label="Sample recipe in Miso's cook view">
+      <div class="r-head">
+        <div class="thumb" aria-hidden="true">Your Cook&shy;book</div>
+        <div>
+          <h2>Miso-Butter Noodles with Crispy Mushrooms <span class="sample">Sample</span></h2>
+          <small>Serves 2 · Total 25 min · Vegetarian</small>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="btn" id="cookBtn" type="button" aria-pressed="false">☀ Cook mode</button>
+        <div class="scale" role="group" aria-label="Scale the recipe">
+          <button type="button" data-f="0.5" aria-pressed="false">½×</button>
+          <button type="button" data-f="1" aria-pressed="true">1×</button>
+          <button type="button" data-f="2" aria-pressed="false">2×</button>
+          <button type="button" data-f="3" aria-pressed="false">3×</button>
+        </div>
+        <span class="sep"></span>
+        <button class="btn" id="resetBtn" type="button">Reset</button>
+      </div>
+
+      <div class="cols">
+        <div>
+          <h3>Ingredients <small>tap to check off</small></h3>
+          <ul class="ings" id="ings"></ul>
+        </div>
+        <div>
+          <h3>Method <small>tap the step you're on</small></h3>
+          <ol class="steps" id="steps"></ol>
+        </div>
+      </div>
+
+      <div class="stepper" id="stepper" hidden>
+        <button type="button" id="prevBtn">← Back</button>
+        <span id="stepLabel">5 steps</span>
+        <button type="button" id="nextBtn">Next →</button>
+      </div>
+      <div class="timers" id="timers" aria-live="polite"></div>
+      <p class="note" id="wakeNote">Cook mode keeps your screen from going to sleep while you cook.</p>
+    </article>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <span class="eyebrow">What it does</span>
+      <h2>Find a recipe, cook it, plan the week.</h2>
+    </div>
+    <div class="features">
+      <div class="feature">
+        <h3>Find</h3>
+        <ul>
+          <li>Search every recipe by name, ingredient, cookbook or your own tags.</li>
+          <li>Filter by course, protein, diet, method, time and rating.</li>
+          <li>Air fryer, slow cooker, Instant Pot, sheet pan and freezer-friendly are detected for you.</li>
+          <li>Leave out what you don't like: “without mushrooms, cilantro”.</li>
+        </ul>
+      </div>
+      <div class="feature">
+        <h3>Cook</h3>
+        <ul>
+          <li>Cook mode keeps the screen awake and makes the text bigger.</li>
+          <li>Check off ingredients and highlight the step you're on.</li>
+          <li>Tap any time in a step to start a timer with an alarm.</li>
+          <li>Scale to half, double or triple; keep your own notes and star ratings.</li>
+        </ul>
+      </div>
+      <div class="feature">
+        <h3>Plan</h3>
+        <ul>
+          <li>Drop recipes into a week view.</li>
+          <li>Add meals to Google Calendar, or export the week in one file.</li>
+          <li>Build a shopping list from a recipe or the whole week, sorted by store aisle.</li>
+          <li>Copy or share the list to Notes or Reminders.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <span class="eyebrow">Search</span>
+      <h2>Filters that know what's in the recipe.</h2>
+      <p>Miso reads each recipe and works out the course, main protein, diet, cooking method and roughly how long it takes. Try it on a few example recipes.</p>
+    </div>
+    <div class="search-demo">
+      <div class="sbox">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="sq" type="search" placeholder="Search: chicken, soup, lemon…" autocomplete="off" aria-label="Search example recipes">
+      </div>
+      <div class="chip-group" id="g-course"><span>Course</span></div>
+      <div class="chip-group" id="g-method"><span>Method</span></div>
+      <div class="chip-group" id="g-more"><span>More</span></div>
+      <div class="count" id="scount"></div>
+      <div class="results" id="sres"></div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <span class="eyebrow">Where recipes come from</span>
+      <h2>The books you have, plus the sites you use.</h2>
+    </div>
+    <div class="sources">
+      <div class="source"><b>Your ebook cookbooks</b><p>Point Miso at a folder of EPUB or MOBI files (Google Drive works). It learns each book's layout and pulls out every recipe, photo and cover.</p></div>
+      <div class="source"><b>Tricky books too</b><p>Picture-heavy and scanned-looking cookbooks are read page by page with your Mac's built-in text recognition.</p></div>
+      <div class="source"><b>NYT Cooking &amp; EatingWell</b><p>Search both sites from inside Miso, see their ratings, and save a recipe with one tap so it's searchable offline.</p></div>
+      <div class="source"><b>Any recipe link</b><p>Paste a link from most recipe sites and Miso imports the ingredients and steps.</p></div>
+    </div>
+  </section>
+
+  <section class="block" id="get">
+    <div class="block-head">
+      <span class="eyebrow">Get it</span>
+      <h2>It runs on your own Mac.</h2>
+      <p>Miso isn't a website you sign up for. It's a small app you run at home, so it can read your own cookbook files.</p>
+    </div>
+    <div class="getit">
+      <ul class="needs">
+        <li><b>A Mac</b><span>Recent macOS with Python 3 (it comes with Apple's developer tools).</span></li>
+        <li><b>Your cookbooks</b><span>EPUB or MOBI files in one folder. Books with copy protection (DRM) can't be read.</span></li>
+        <li><b>Google Chrome</b><span>Only needed for picture-style books that have to be read page by page.</span></li>
+        <li><b>Calibre</b><span>Optional, for MOBI and Kindle files.</span></li>
+      </ul>
+      <ol class="how">
+        <li><span><b>Ask for access.</b> The code lives in a private GitHub repository; ask for an invite to <code>miso</code>.</span></li>
+        <li><span><b>Download it</b> and edit <code>config.json</code> to point at your cookbook folder.</span></li>
+        <li><span><b>Double-click</b> <code>Miso.command</code>. Your browser opens to Miso while it reads your books in the background.</span></li>
+        <li><span><b>Cook from the iPad</b> by opening the address shown in Settings on the same Wi-Fi, then Add to Home Screen.</span></li>
+      </ol>
+    </div>
+    <p class="privacy">Your books and recipes stay on your computer. Miso only goes online when you search or save from NYT Cooking, EatingWell or a link you paste.</p>
+  </section>
+
+  <footer>
+    <span>Miso · a home-made cookbook app</span>
+    <span>The recipe and search results on this page are examples.</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  /* ---------------- sample recipe (written for this page) ---------------- */
+  const ING = [
+    [6, "oz dried udon or spaghetti"],
+    [2, "tablespoons white miso"],
+    [2, "tablespoons unsalted butter, softened"],
+    [1, "tablespoon rice vinegar"],
+    [1, "teaspoon soy sauce"],
+    [8, "oz mixed mushrooms, torn into pieces"],
+    [1, "tablespoon neutral oil"],
+    [2, "scallions, thinly sliced"],
+    [1, "teaspoon toasted sesame seeds"],
+  ];
+  const STEPS = [
+    "Bring a large pot of salted water to a boil. Cook the noodles until just tender, about 8 minutes. Save ½ cup of the cooking water, then drain.",
+    "While the noodles cook, heat the oil in a wide skillet over medium-high heat. Add the mushrooms in one layer and leave them alone until browned underneath, about 5 minutes. Stir and cook 2 minutes more.",
+    "In a large bowl, mash the miso and butter together with a fork, then stir in the vinegar and soy sauce.",
+    "Add the hot noodles and 3 tablespoons of the cooking water. Toss until glossy, adding more water a splash at a time if it looks dry.",
+    "Top with the mushrooms, scallions and sesame seeds. Eat right away.",
+  ];
+  const state = { scale: 1, done: new Set(), step: -1, cooking: false };
+
+  const FR = [[0, ""], [1 / 8, "⅛"], [1 / 4, "¼"], [1 / 3, "⅓"], [1 / 2, "½"], [2 / 3, "⅔"], [3 / 4, "¾"], [1, ""]];
+  function fmt(n) {
+    const w = Math.floor(n + 1e-9), f = n - w;
+    let best = FR[0];
+    for (const o of FR) if (Math.abs(f - o[0]) < Math.abs(f - best[0])) best = o;
+    const whole = best[0] === 1 ? w + 1 : w;
+    return (whole ? String(whole) : "") + best[1] || "0";
+  }
+  function plural(text, n) {
+    if (n <= 1) return text;
+    return text.replace(/^(tablespoon|teaspoon|scallion)(?!s)/, "$1s");
+  }
+
+  function renderIngs() {
+    $("#ings").innerHTML = ING.map(([q, t], i) => {
+      const n = q * state.scale;
+      return `<li data-i="${i}" class="${state.done.has(i) ? "done" : ""}"><span class="box"></span><span class="t"><span class="q">${fmt(n)}</span> ${esc(plural(t, n))}</span></li>`;
+    }).join("");
+  }
+  const TIME = /(\d+)\s*(minutes?)/g;
+  function renderSteps() {
+    $("#steps").innerHTML = STEPS.map((s, i) => {
+      const cls = i === state.step ? "cur" : i < state.step ? "past" : "";
+      const html = esc(s).replace(TIME, (all, n) => `<span class="tmr" data-sec="${n * 60}" role="button" tabindex="0" title="Start a ${n}-minute timer">⏱ ${all}</span>`);
+      return `<li data-i="${i}" class="${cls}">${html}</li>`;
+    }).join("");
+    $("#stepLabel").textContent = state.step < 0 ? `${STEPS.length} steps` : `Step ${state.step + 1} of ${STEPS.length}`;
+  }
+  function setStep(i) {
+    state.step = Math.max(-1, Math.min(STEPS.length - 1, i));
+    renderSteps();
+  }
+
+  $("#ings").addEventListener("click", (e) => {
+    const li = e.target.closest("li"); if (!li) return;
+    const i = +li.dataset.i;
+    state.done.has(i) ? state.done.delete(i) : state.done.add(i);
+    li.classList.toggle("done");
+  });
+  $("#steps").addEventListener("click", (e) => {
+    const t = e.target.closest(".tmr");
+    if (t) { startTimer(+t.dataset.sec); return; }
+    const li = e.target.closest("li"); if (!li) return;
+    const i = +li.dataset.i;
+    setStep(i === state.step ? i + 1 : i);
+  });
+  $("#steps").addEventListener("keydown", (e) => {
+    const t = e.target.closest(".tmr");
+    if (t && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); startTimer(+t.dataset.sec); }
+  });
+  $$(".scale button").forEach((b) => b.addEventListener("click", () => {
+    state.scale = +b.dataset.f;
+    $$(".scale button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    renderIngs();
+  }));
+  $("#prevBtn").addEventListener("click", () => setStep(state.step - 1));
+  $("#nextBtn").addEventListener("click", () => setStep(state.step + 1));
+  $("#resetBtn").addEventListener("click", () => { state.done.clear(); setStep(-1); renderIngs(); });
+
+  /* ---------------- cook mode + screen wake ---------------- */
+  let lock = null;
+  async function wake(on) {
+    const note = $("#wakeNote");
+    if (!on) { try { await lock?.release(); } catch (e) { /* already released */ } lock = null; note.textContent = "Cook mode keeps your screen from going to sleep while you cook."; return; }
+    try {
+      lock = await navigator.wakeLock.request("screen");
+      note.textContent = "Screen will stay awake while this page is open.";
+    } catch (e) {
+      note.textContent = "Cook mode is on. This browser won't keep the screen awake here, but the Miso app will.";
+    }
+  }
+  $("#cookBtn").addEventListener("click", () => {
+    state.cooking = !state.cooking;
+    document.body.classList.toggle("cooking", state.cooking);
+    $("#cookBtn").classList.toggle("on", state.cooking);
+    $("#cookBtn").setAttribute("aria-pressed", String(state.cooking));
+    $("#stepper").hidden = !state.cooking;
+    if (state.cooking && state.step < 0) setStep(0);
+    wake(state.cooking);
+  });
+  document.addEventListener("visibilitychange", () => { if (state.cooking && document.visibilityState === "visible" && !lock) wake(true); });
+  document.addEventListener("keydown", (e) => {
+    if (!state.cooking || e.target.closest("input")) return;
+    if (e.key === "ArrowRight") { e.preventDefault(); setStep(state.step + 1); }
+    if (e.key === "ArrowLeft") { e.preventDefault(); setStep(state.step - 1); }
+  });
+
+  /* ---------------- timers ---------------- */
+  const timers = [];
+  let audio;
+  const mmss = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  function beep() {
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      [0, .25, .5].forEach((d) => {
+        const o = audio.createOscillator(), g = audio.createGain();
+        o.frequency.value = 880; o.connect(g); g.connect(audio.destination);
+        g.gain.setValueAtTime(.0001, audio.currentTime + d);
+        g.gain.exponentialRampToValueAtTime(.25, audio.currentTime + d + .02);
+        g.gain.exponentialRampToValueAtTime(.0001, audio.currentTime + d + .2);
+        o.start(audio.currentTime + d); o.stop(audio.currentTime + d + .22);
+      });
+    } catch (e) { /* no audio available */ }
+  }
+  function startTimer(sec) {
+    try { audio = audio || new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { /* no audio */ }
+    timers.push({ id: Math.random().toString(36).slice(2), end: Date.now() + sec * 1000, label: `${sec / 60} min` });
+    drawTimers();
+  }
+  function drawTimers() {
+    const now = Date.now();
+    $("#timers").innerHTML = timers.map((t) => {
+      const left = Math.max(0, Math.round((t.end - now) / 1000));
+      return `<span class="timer ${left ? "" : "ring"}" data-id="${t.id}"><small>${t.label}</small><b>${left ? mmss(left) : "Done!"}</b><button type="button" data-a="plus" aria-label="Add one minute">+1</button><button type="button" data-a="x" aria-label="Dismiss timer">✕</button></span>`;
+    }).join("");
+  }
+  $("#timers").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    const t = timers.find((x) => x.id === b.closest(".timer").dataset.id);
+    if (b.dataset.a === "x") timers.splice(timers.indexOf(t), 1);
+    else { t.end = Math.max(t.end, Date.now()) + 60000; t.rang = 0; }
+    drawTimers();
+  });
+  setInterval(() => {
+    if (!timers.length) return;
+    const now = Date.now();
+    timers.forEach((t) => { if (t.end <= now && (!t.rang || now - t.rang > 4000)) { t.rang = now; beep(); } });
+    drawTimers();
+  }, 500);
+
+  renderIngs();
+  renderSteps();
+
+  /* ---------------- search demo (example recipes) ---------------- */
+  const R = [
+    { t: "Miso-Butter Noodles with Crispy Mushrooms", src: "Your cookbooks", course: "Mains", method: [], diet: ["Vegetarian"], min: 25, i: "noodles miso butter mushrooms scallions", c: "#7A5C2E" },
+    { t: "Sheet-Pan Gochujang Chicken Thighs", src: "Saved from NYT Cooking", course: "Mains", method: ["Sheet pan"], diet: [], min: 40, rating: 4.7, i: "chicken thighs gochujang honey garlic", c: "#B4462C" },
+    { t: "Slow-Cooker White Bean & Kale Soup", src: "Your cookbooks", course: "Soups", method: ["Slow cooker", "Freezer-friendly"], diet: ["Vegetarian", "Vegan"], min: 380, i: "white beans kale garlic lemon broth", c: "#5E7A3A" },
+    { t: "Air-Fryer Crispy Chickpeas", src: "Your cookbooks", course: "Snacks", method: ["Air fryer"], diet: ["Vegetarian", "Vegan"], min: 20, i: "chickpeas olive oil paprika", c: "#C08A2A" },
+    { t: "20-Minute Lemon-Garlic Salmon", src: "Saved from EatingWell", course: "Mains", method: [], diet: [], min: 20, rating: 4.5, i: "salmon lemon garlic butter parsley", c: "#D2734F" },
+    { t: "Freezer Breakfast Burritos", src: "Your cookbooks", course: "Breakfast", method: ["Freezer-friendly"], diet: ["Vegetarian"], min: 45, i: "eggs tortillas black beans cheese salsa", c: "#A0522D", tag: "Kid-approved" },
+    { t: "Instant Pot Chicken Tikka Masala", src: "Saved from NYT Cooking", course: "Mains", method: ["Instant Pot"], diet: [], min: 35, rating: 4.9, i: "chicken tomato cream garam masala ginger", c: "#B8432A", tag: "Weeknight" },
+    { t: "Brown-Butter Banana Bread", src: "Your cookbooks", course: "Desserts", method: ["Freezer-friendly"], diet: ["Vegetarian"], min: 75, i: "bananas butter flour brown sugar eggs", c: "#8C6239" },
+    { t: "Charred Broccoli with Tahini", src: "Your cookbooks", course: "Sides", method: ["Sheet pan"], diet: ["Vegetarian", "Vegan"], min: 25, i: "broccoli tahini lemon garlic", c: "#4F7A45" },
+    { t: "Weeknight Turkey Chili", src: "Saved from EatingWell", course: "Soups", method: ["Freezer-friendly"], diet: [], min: 45, rating: 4.6, i: "ground turkey beans tomatoes chili powder cumin", c: "#9E3B24", tag: "Make again" },
+  ];
+  const sel = { course: "", method: "", quick: false, rated: false, veg: false };
+  const COURSES = ["Mains", "Soups", "Sides", "Breakfast", "Snacks", "Desserts"];
+  const METHODS = ["Air fryer", "Slow cooker", "Instant Pot", "Sheet pan", "Freezer-friendly"];
+  const MORE = [["quick", "30 min or less"], ["veg", "Vegetarian"], ["rated", "★ 4.5 & up"]];
+
+  const chip = (label, key, val, on) => `<button type="button" class="chip" data-k="${key}" data-v="${esc(val)}" aria-pressed="${on}">${esc(label)}</button>`;
+  function drawChips() {
+    $("#g-course").innerHTML = `<span>Course</span>` + COURSES.map((c) => chip(c, "course", c, sel.course === c)).join("");
+    $("#g-method").innerHTML = `<span>Method</span>` + METHODS.map((m) => chip(m, "method", m, sel.method === m)).join("");
+    $("#g-more").innerHTML = `<span>More</span>` + MORE.map(([k, l]) => chip(l, k, "1", sel[k])).join("");
+  }
+  const dur = (m) => m >= 60 ? `${Math.floor(m / 60)} hr${m % 60 ? " " + (m % 60) + " min" : ""}` : `${m} min`;
+  function drawResults() {
+    const q = $("#sq").value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const list = R.filter((r) => {
+      const hay = (r.t + " " + r.i + " " + r.course + " " + r.method.join(" ") + " " + (r.tag || "")).toLowerCase();
+      if (q.some((w) => !hay.includes(w))) return false;
+      if (sel.course && r.course !== sel.course) return false;
+      if (sel.method && !r.method.includes(sel.method)) return false;
+      if (sel.quick && r.min > 30) return false;
+      if (sel.veg && !r.diet.includes("Vegetarian")) return false;
+      if (sel.rated && !(r.rating >= 4.5)) return false;
+      return true;
+    });
+    $("#scount").innerHTML = `<b>${list.length}</b> of ${R.length} example recipes`;
+    $("#sres").innerHTML = list.length ? list.map((r) => `
+      <div class="card">
+        <div class="thumb" style="background:${r.c}" aria-hidden="true">${esc(r.t[0])}</div>
+        <div class="body">
+          <h4>${esc(r.t)}</h4>
+          <span class="src">${esc(r.src)}</span>
+          <span class="meta"><span>⏱ ${dur(r.min)}</span>${r.rating ? `<span class="stars">★ ${r.rating.toFixed(1)}</span>` : ""}${r.tag ? `<span class="tag">${esc(r.tag)}</span>` : ""}</span>
+        </div>
+      </div>`).join("") : `<p class="empty">Nothing matches. Try removing a filter.</p>`;
+  }
+  document.querySelector(".search-demo").addEventListener("click", (e) => {
+    const b = e.target.closest(".chip"); if (!b) return;
+    const k = b.dataset.k;
+    if (k === "course" || k === "method") sel[k] = sel[k] === b.dataset.v ? "" : b.dataset.v;
+    else sel[k] = !sel[k];
+    drawChips(); drawResults();
+  });
+  $("#sq").addEventListener("input", drawResults);
+  drawChips();
+  drawResults();
+})();
+</script>
