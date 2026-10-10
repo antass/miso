@@ -1,6 +1,6 @@
-# Mise — your cookbooks, searchable
+# Miso — your cookbooks, searchable
 
-**Start it:** double-click `Mise.command`. Your browser opens at http://localhost:8137. Keep that Terminal window open while you use Mise.
+**Start it:** double-click `Miso.command`. Your browser opens at http://localhost:8137. Keep that Terminal window open while you use Miso.
 
 **On the kitchen iPad:** connect to the same Wi-Fi and open the address shown in Settings (⚙), for example `http://<your-mac>.local:8137`. Then tap Share → Add to Home Screen.
 
@@ -23,7 +23,7 @@
   - `library_folders` are cookbook-only folders.
   - `mixed_folders` hold all kinds of books, such as a Calibre library. A book from one of these only counts if it has at least 10 recipes.
 - `data/state.json` stores your list, plan, favourites, notes, and saved web recipes. It syncs through iCloud.
-- The recipe index and covers are cached in `~/Library/Application Support/Mise`. You can delete this cache at any time; it rebuilds itself.
+- The recipe index and covers are cached in `~/Library/Application Support/Miso`. You can delete this cache at any time; it rebuilds itself.
 - MOBI and AZW3 files are converted with Calibre's `ebook-convert`, which is already installed.
 
 ## If a book is missing

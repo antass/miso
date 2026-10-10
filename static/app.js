@@ -1,4 +1,4 @@
-/* Mise — cookbook search, cook mode, shopping list, meal plan. Vanilla JS, no build step. */
+/* Miso — cookbook search, cook mode, shopping list, meal plan. Vanilla JS, no build step. */
 "use strict";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -118,7 +118,7 @@ async function importUrl(url, el) {
   el?.querySelector(".spin")?.remove();
   if (r.blocked) {
     openModal(`<h2>${esc(r.site)} needs your browser</h2>
-      <p class="sub">That site blocks apps from reading its pages. Open the recipe, then click your <b>Save to Mise</b> bookmark (set it up in Settings).</p>
+      <p class="sub">That site blocks apps from reading its pages. Open the recipe, then click your <b>Save to Miso</b> bookmark (set it up in Settings).</p>
       <div class="row"><button class="btn" onclick="closeModal()">Cancel</button><a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Open recipe</a></div>`);
   } else toast(r.error || "Couldn't import that page");
 }
@@ -199,7 +199,7 @@ async function runSearch() {
     const { results } = await api(`/api/web/search?site=${SEARCH.mode}&q=${encodeURIComponent(val)}`);
     if (seq !== searchSeq) return;
     res.innerHTML = results.length
-      ? `<p class="hint">Tap a recipe to import it into Mise — it'll be searchable (and filterable) offline next time.</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
+      ? `<p class="hint">Tap a recipe to import it into Miso — it'll be searchable (and filterable) offline next time.</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
       : `<p class="empty">Nothing found on ${SEARCH.mode === "nyt" ? "NYT Cooking" : "EatingWell"}.</p>`;
     return bindCards(res, importUrl);
   }
@@ -844,7 +844,7 @@ function eventDetails(entry, r) {
   const c = entry.card;
   const lines = [c.source === "book" ? `From the cookbook “${c.bookTitle}”` : `From ${c.site}${r?.url ? ": " + r.url : ""}`];
   if (r?.ingredients) lines.push("", "Ingredients:", ...r.ingredients.filter((i) => !i.h).map((i) => "• " + i.t));
-  lines.push("", `Open in Mise: ${location.origin}/#/r/${encodeURIComponent(c.id)}`);
+  lines.push("", `Open in Miso: ${location.origin}/#/r/${encodeURIComponent(c.id)}`);
   return lines.join("\n").slice(0, 1800);
 }
 function gcalUrl(d, entry, r) {
@@ -920,12 +920,12 @@ function pickRecipeModal(date) {
 async function exportIcs(days) {
   const icsEsc = (s) => String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n");
   const fold = (line) => line.match(/.{1,73}/g).join("\r\n ");
-  const out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Mise//Meal Plan//EN", "CALSCALE:GREGORIAN"];
+  const out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Miso//Meal Plan//EN", "CALSCALE:GREGORIAN"];
   for (const d of days) {
     for (const entry of S.plan[ymd(d)] || []) {
       const r = await fetchRecipe(entry.card.id);
       const [s, e] = eventTimes(ymd(d), entry.meal);
-      out.push("BEGIN:VEVENT", `UID:${entry.id}@mise`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`,
+      out.push("BEGIN:VEVENT", `UID:${entry.id}@miso`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`,
         `DTSTART:${s}`, `DTEND:${e}`, fold(`SUMMARY:${icsEsc(`${entry.meal}: ${entry.card.title}`)}`),
         fold(`DESCRIPTION:${icsEsc(eventDetails(entry, r))}`), "END:VEVENT");
     }
@@ -955,9 +955,9 @@ async function settingsModal() {
     ${lib.folders.map((f) => `<p style="margin:4px 0"><code>${esc(f)}</code></p>`).join("")}
     <p><button class="btn sm" id="ri">Rescan for new books</button> <button class="btn sm" id="rf">Re-read every book</button></p>
     <label>Save recipes from any website</label>
-    <p class="sub" style="margin:0">Drag this to your bookmarks bar. On any recipe page (NYT Cooking, EatingWell, Serious Eats…), click it to save the recipe into Mise.</p>
-    <a class="bm" href="${esc(bm)}" onclick="event.preventDefault();toast('Drag me to your bookmarks bar')">＋ Save to Mise</a>
-    ${info.lan?.length ? `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Same Wi-Fi, open: ${info.lan.map((u) => `<code>${esc(u)}</code>`).join(" or ")}. Then Share → Add to Home Screen.</p>` : `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Start Mise with the <b>Mise.command</b> launcher (it turns on Wi-Fi access).</p>`}
+    <p class="sub" style="margin:0">Drag this to your bookmarks bar. On any recipe page (NYT Cooking, EatingWell, Serious Eats…), click it to save the recipe into Miso.</p>
+    <a class="bm" href="${esc(bm)}" onclick="event.preventDefault();toast('Drag me to your bookmarks bar')">＋ Save to Miso</a>
+    ${info.lan?.length ? `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Same Wi-Fi, open: ${info.lan.map((u) => `<code>${esc(u)}</code>`).join(" or ")}. Then Share → Add to Home Screen.</p>` : `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Start Miso with the <b>Miso.command</b> launcher (it turns on Wi-Fi access).</p>`}
     <div class="row"><button class="btn primary" id="sd">Done</button></div>`, () => {
     $("#st").onchange = (e) => { S.settings.theme = e.target.value; applyTheme(); commit(); };
     $$("[data-meal]").forEach((i) => (i.onchange = () => { S.settings.mealTimes[i.dataset.meal] = i.value; commit(); }));
@@ -1001,7 +1001,7 @@ async function handleBookmarklet(payload) {
   try {
     const { url, ld } = JSON.parse(decodeURIComponent(payload));
     const r = await post("/api/web/import", { url, ld });
-    if (r.id) { history.replaceState(null, "", "#/r/" + encodeURIComponent(r.id)); toast("Saved to Mise"); return route(); }
+    if (r.id) { history.replaceState(null, "", "#/r/" + encodeURIComponent(r.id)); toast("Saved to Miso"); return route(); }
     app.innerHTML = `<p class="empty">${esc(r.error || "Couldn't find a recipe on that page.")}</p>`;
   } catch (e) {
     app.innerHTML = `<p class="empty">Couldn't read that page.</p>`;

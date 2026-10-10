@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Mise — a local cookbook server.
+"""Miso — a local cookbook server.
 
 Run:  python3 server.py            (http://localhost:8137)
       python3 server.py --lan      (also reachable from an iPad/phone on the same Wi-Fi)
@@ -32,7 +32,7 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC = os.path.join(APP_DIR, "static")
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 STATE_PATH = os.path.join(APP_DIR, "data", "state.json")
-CACHE = os.path.expanduser("~/Library/Application Support/Mise")
+CACHE = os.path.expanduser("~/Library/Application Support/Miso")
 INDEX_VERSION = 5
 
 DEFAULT_CONFIG = {
@@ -673,7 +673,7 @@ if __name__ == "__main__":
     host = "0.0.0.0" if LAN else "127.0.0.1"
     port = cfg["port"]
     srv = ThreadingHTTPServer((host, port), Handler)
-    print(f"\n  Mise is running →  http://localhost:{port}")
+    print(f"\n  Miso is running →  http://localhost:{port}")
     if LAN:
         for u in lan_urls(port):
             print(f"  On your iPad/phone →  {u}")

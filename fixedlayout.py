@@ -18,7 +18,7 @@ import tempfile
 
 import extract
 
-CACHE = os.path.expanduser("~/Library/Application Support/Mise")
+CACHE = os.path.expanduser("~/Library/Application Support/Miso")
 OCR_BIN = os.path.join(CACHE, "bin", "ocr")
 OCR_SRC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ocr.swift")
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
@@ -65,7 +65,7 @@ def ocr_book(ep, progress=None):
             return json.load(f)
     if not available():
         return []
-    tmp = tempfile.mkdtemp(prefix="mise-ocr-")
+    tmp = tempfile.mkdtemp(prefix="miso-ocr-")
     try:
         jobs = []
         for di, doc in enumerate(ep.spine):
