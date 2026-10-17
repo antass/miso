@@ -671,7 +671,7 @@ if __name__ == "__main__":
                     pass
     threading.Thread(target=backfill_ratings, daemon=True).start()
     host = "0.0.0.0" if LAN else "127.0.0.1"
-    port = cfg["port"]
+    port = int(os.environ.get("PORT") or cfg["port"])   # PORT lets a launcher (e.g. the preview tool) pick the port
     srv = ThreadingHTTPServer((host, port), Handler)
     print(f"\n  Miso is running →  http://localhost:{port}")
     if LAN:
