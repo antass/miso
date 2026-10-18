@@ -100,6 +100,48 @@ def _rank_by_title(results, q):
     return sorted(results, key=lambda r: -sum(w in r["title"].lower() for w in words))
 
 
+def _clean_html(x):
+    return " ".join(html.unescape(re.sub(r"<[^>]+>", " ", x or "")).split())
+
+
+def wprm_to_recipe(item, site):
+    """Turn a WP Recipe Maker REST item into Miso's recipe shape (no page fetch needed)."""
+    rec, link = item.get("recipe") or {}, item.get("link")
+    ingredients = []
+    for i in rec.get("ingredients_flat") or []:
+        if i.get("type") == "group":
+            if i.get("name"):
+                ingredients.append({"t": _clean_html(i["name"]), "h": 1})
+            continue
+        line = " ".join(p for p in (i.get("amount"), i.get("unit"), _clean_html(i.get("name"))) if p)
+        if i.get("notes"):
+            line += ", " + _clean_html(i["notes"])
+        if line:
+            ingredients.append({"t": line})
+    steps = []
+    for st in rec.get("instructions_flat") or []:
+        if st.get("type") == "group":
+            if st.get("name"):
+                steps.append({"t": _clean_html(st["name"]), "h": 1})
+        elif _clean_html(st.get("text")):
+            steps.append({"t": _clean_html(st["text"])})
+    meta = []
+    if rec.get("servings"):
+        meta.append(f"Serves {rec['servings']}" + (f" {rec.get('servings_unit')}" if rec.get("servings_unit") not in (None, "", "servings") else ""))
+    mins = int(rec.get("total_time") or 0)
+    if mins:
+        meta.append("Total " + (f"{mins // 60} hr {mins % 60} min".replace(" 0 min", "") if mins >= 60 else f"{mins} min"))
+    rating = rec.get("rating") or {}
+    return {
+        "id": "w-" + hashlib.sha1(link.encode()).hexdigest()[:10], "source": "web", "title": html.unescape(rec.get("name") or ""),
+        "site": site, "url": link, "author": rec.get("author_name") or "", "image": rec.get("image_url") or None,
+        "rating": {"value": round(float(rating["average"]), 1), "count": int(rating.get("count") or 0)} if rating.get("average") else None,
+        "meta": meta, "headnote": [_clean_html(rec.get("summary"))] if rec.get("summary") else [],
+        "ingredients": ingredients, "steps": steps, "notes": [_clean_html(rec.get("notes"))] if rec.get("notes") else [], "images": [],
+        "siteCourses": [t.get("name") for t in ((rec.get("tags") or {}).get("course") or []) if isinstance(t, dict)],
+    }
+
+
 def search_wprm(domain, name, q):
     """Sites built on WP Recipe Maker expose their recipe cards through the WordPress REST API."""
     data = json.loads(fetch(f"https://{domain}/wp-json/wp/v2/wprm_recipe?per_page=30&search=" + urllib.parse.quote(q)))
@@ -115,7 +157,8 @@ def search_wprm(domain, name, q):
                     "byline": html.unescape(re.sub(r"<[^>]+>", "", rec.get("summary") or ""))[:140],
                     "rating": round(float(rating["average"]), 1) if rating.get("average") else None,
                     "ratingCount": int(rating["count"]) if rating.get("count") else None,
-                    "time": (f"{mins // 60} hr {mins % 60} min".replace(" 0 min", "") if mins >= 60 else f"{mins} min") if mins else None})
+                    "time": (f"{mins // 60} hr {mins % 60} min".replace(" 0 min", "") if mins >= 60 else f"{mins} min") if mins else None,
+                    "_recipe": wprm_to_recipe(item, name)})       # full recipe: lets filters work without fetching pages
     return _rank_by_title(out, q)[:40]
 
 
@@ -133,7 +176,7 @@ def search_yummy_toddler_food(q):
         if title and link:
             out.append({"title": html.unescape(re.sub(r"<!\[CDATA\[|\]\]>", "", title.group(1))).strip(), "url": link.group(1).strip(),
                         "image": img.group(1) if img else None, "site": "Yummy Toddler Food",
-                        "byline": ", ".join(c for c in cats if c != "Recipes")[:120]})
+                        "byline": ", ".join(c for c in cats if c != "Recipes")[:120], "cats": cats})
     return _rank_by_title(out, q)
 
 

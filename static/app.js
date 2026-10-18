@@ -23,7 +23,7 @@ const ICON = {
 /* ------------------------------------------------------------------ persisted state */
 
 let S = {
-  favorites: [], recent: [], list: [], plan: {}, progress: {}, cooked: {}, notes: {}, tags: {}, ratings: {},
+  favorites: [], recent: [], list: [], plan: {}, progress: {}, cooked: {}, notes: {}, tags: {}, ratings: {}, combos: {},
   settings: { theme: "auto", mealTimes: { Breakfast: "08:00", Lunch: "12:30", Dinner: "18:00", Snack: "15:30" }, mealMinutes: 60 },
 };
 async function loadState() {
@@ -121,7 +121,7 @@ async function importUrl(url, el) {
   el?.querySelector(".spin")?.remove();
   if (r.blocked) {
     openModal(`<h2>${esc(r.site)} needs your browser</h2>
-      <p class="sub">That site blocks apps from reading its pages. Open the recipe, then click your <b>Save to Miso</b> bookmark (set it up in Settings).</p>
+      <p class="sub">That site blocks apps from reading its pages. Open the recipe, then click your <b>Save to Miso</b> bookmark. <button class="link" onclick="bookmarkletModal()">Set up the bookmark</button></p>
       <div class="row"><button class="btn" onclick="closeModal()">Cancel</button><a class="btn primary" href="${esc(url)}" target="_blank" rel="noopener">Open recipe</a></div>`);
   } else toast(r.error || "Couldn't import that page");
 }
@@ -131,7 +131,7 @@ async function importUrl(url, el) {
 const EMPTY_F = () => ({ course: [], protein: [], diet: [], method: [], book: [], tag: [] });
 const SEARCH = { q: "", mode: "all", f: EMPTY_F(), maxtime: "", rating: "", with: "", without: "", sort: "relevance", shown: 48 };
 const MODES = [
-  ["all", "Everything"], ["books", "My cookbooks"], ["web", "Saved recipes"],
+  ["all", "Everything"], ["books", "My cookbooks"], ["web", "Saved from websites"],
   ...WEB_SITES,
 ];
 const GROUP_LABEL = { course: "Course", protein: "Protein", diet: "Diet", method: "Method", book: "Source", tag: "My tags" };
@@ -159,6 +159,16 @@ function searchQS() {
   if (SEARCH.without.trim()) p.set("without", SEARCH.without);
   return p.toString();
 }
+
+function webQS(site, val) {
+  const p = new URLSearchParams(searchQS());
+  ["mode", "limit"].forEach((k) => p.delete(k));
+  p.set("site", site);
+  p.set("q", val);
+  if (p.get("sort") === "relevance") p.delete("sort");
+  return p.toString();
+}
+const webFiltering = () => hasFilters() || ["rating", "time", "ingredients"].includes(SEARCH.sort);
 
 async function viewSearch() {
   const lib = await getLibrary(true);
@@ -196,19 +206,28 @@ async function runSearch() {
     return bindCards(res, importUrl);
   }
   if (isWebMode()) {
-    fbar.innerHTML = "";
-    if (!val) { res.innerHTML = `<p class="empty">Type what you're craving and press Enter.</p>`; return; }
-    res.innerHTML = `<p class="empty"><span class="spin"></span></p>`;
-    const { results } = await api(`/api/web/search?site=${SEARCH.mode}&q=${encodeURIComponent(val)}`);
+    if (!val) { fbar.innerHTML = ""; res.innerHTML = `<p class="empty">Type what you're craving and press Enter.</p>`; return; }
+    renderFilterBar();
+    res.innerHTML = `<p class="empty"><span class="spin"></span>${webFiltering() ? " Checking each recipe against your filters…" : ""}</p>`;
+    const data = await api(`/api/web/search?${webQS(SEARCH.mode, val)}`);
     if (seq !== searchSeq) return;
-    res.innerHTML = results.length
-      ? `<p class="hint">${SEARCH.mode === "ytf" ? "Yummy Toddler Food only lets your own browser read its recipes: tap one to open it, then use your <b>Save to Miso</b> bookmark (Settings → Save recipes from any website)." : "Tap a recipe to import it into Miso — it'll be searchable (and filterable) offline next time."}</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
-      : `<p class="empty">Nothing found on ${esc(WEB_NAME[SEARCH.mode])}.</p>`;
+    noteCombo();
+    if (data.error) { res.innerHTML = `<p class="empty">${esc(data.message || `Couldn't reach ${WEB_NAME[SEARCH.mode]} right now. Try again in a few minutes.`)}</p>`; return; }
+    const results = data.results || [];
+    FACETS = data.facets || {};       // counts only exist when filters ran on this site
+    renderFilterBar();
+    const head = data.total != null ? `<div class="result-head"><b>${data.total}</b> ${data.total === 1 ? "recipe matches" : "recipes match"} your filters on ${esc(WEB_NAME[SEARCH.mode])}</div>` : "";
+    res.innerHTML = head + (results.length
+      ? `<p class="hint">${SEARCH.mode === "ytf" ? "Yummy Toddler Food only lets your own browser read its recipes: tap one to open it, then use your <b>Save to Miso</b> bookmark (<button class=\'link\' id=\'bmHint\'>set it up</button>)." : "Tap a recipe to import it into Miso — it'll be searchable (and filterable) offline next time."}</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
+      : `<p class="empty">Nothing ${webFiltering() ? "matching your filters " : ""}found on ${esc(WEB_NAME[SEARCH.mode])}.${hasFilters() ? ` <button class="link" id="clr3">Clear filters</button>` : ""}</p>`);
+    $("#clr3")?.addEventListener("click", clearFilters);
+    $("#bmHint")?.addEventListener("click", bookmarkletModal);
     return bindCards(res, importUrl);
   }
   if (!val && !hasFilters()) { renderFilterBar(); return renderHome(res); }
   const data = await api("/api/search?" + searchQS());
   if (seq !== searchSeq) return;
+  noteCombo();
   FACETS = data.facets || {};
   renderFilterBar();
   const more = data.total > data.results.length;
@@ -233,28 +252,30 @@ function liveWeb(val, seq) {
     const box = $("#webres");
     if (!box || seq !== searchSeq) return;
     const sec = (site, label) => {
-      const r = WEB_CACHE[site + "|" + val];
+      const r = WEB_CACHE[webQS(site, val)];
       if (r === undefined) return `<div class="section-title"><h2>From ${label}</h2><span class="spin"></span></div>`;
+      if (r.error) return `<div class="section-title"><h2>From ${label}</h2><span class="status">${esc(r.message || "couldn't be searched right now")}</span></div>`;
+      if (!r.length && webFiltering()) return `<div class="section-title"><h2>From ${label}</h2><span class="status">nothing matches your filters</span></div>`;
       if (!r.length) return "";
       return `<div class="section-title"><h2>From ${label}</h2><button data-see="${site}">See all ${r.length} →</button></div>
         <div class="results">${r.slice(0, 6).map((x) => card({ ...x, source: "web", snippet: x.time || "" })).join("")}</div>`;
     };
     box.innerHTML = WEB_SITES.map(([k, n]) => sec(k, n)).join("")
-      + (hasFilters() ? `<p class="hint">Filters apply to your cookbooks and saved recipes. Tap a web recipe to save it, then it can be filtered too.</p>` : "");
+      + (hasFilters() ? `<p class="hint">Filters apply to these sites too. Yummy Toddler Food only shares its own labels (like Breakfast or Dairy-Free), so time, rating and ingredient filters can't check its recipes.</p>` : "");
     bindCards(box, importUrl);
     $$("[data-see]", box).forEach((b) => b.addEventListener("click", () => { SEARCH.mode = b.dataset.see; viewSearch(); }));
   };
   draw();
   webTimer = setTimeout(() => {
     WEB_SITES.forEach(async ([site]) => {
-      const key = site + "|" + val;
+      const key = webQS(site, val);
       if (WEB_CACHE[key] === undefined) {
         let failed = false;
         try {
-          const r = await api(`/api/web/search?site=${site}&q=${encodeURIComponent(val)}`);
-          WEB_CACHE[key] = r.results || [];
+          const r = await api(`/api/web/search?${key}`);
+          WEB_CACHE[key] = r.error ? { error: true, message: r.message } : (r.results || []);
           failed = !!r.error;
-        } catch (e) { WEB_CACHE[key] = []; failed = true; }
+        } catch (e) { WEB_CACHE[key] = { error: true }; failed = true; }
         draw();
         if (failed) delete WEB_CACHE[key];   // a site that timed out gets another try next search
         return;
@@ -262,6 +283,51 @@ function liveWeb(val, seq) {
       draw();
     });
   }, 500);
+}
+
+// ---- remember filter combinations you settle on, to offer them under Browse
+const ratingLabel = (r) => r === "mine" ? "Rated by me" : r === "5" ? "★ 5" : `★ ${r}+`;
+function currentCombo() {
+  const f = {};
+  Object.entries(SEARCH.f).forEach(([g, v]) => v.length && (f[g] = [...v].sort()));
+  const c = { f };
+  if (SEARCH.maxtime) c.maxtime = SEARCH.maxtime;
+  if (SEARCH.rating) c.rating = SEARCH.rating;
+  if (SEARCH.with.trim()) c.with = SEARCH.with.trim().toLowerCase();
+  if (SEARCH.without.trim()) c.without = SEARCH.without.trim().toLowerCase();
+  return c;
+}
+const comboKey = (c) => JSON.stringify([Object.keys(c.f).sort().map((g) => [g, c.f[g]]), c.maxtime || "", c.rating || "", c.with || "", c.without || ""]);
+function comboLabel(c) {
+  const parts = [];
+  if (c.rating) parts.push(ratingLabel(c.rating));
+  if (c.maxtime) parts.push(`≤ ${c.maxtime} min`);
+  ["course", "protein", "diet", "method"].forEach((g) => (c.f[g] || []).forEach((v) => parts.push(v)));
+  (c.f.tag || []).forEach((t) => parts.push("#" + t));
+  (c.f.book || []).forEach((b) => parts.push(facetLabel("book", b)));
+  if (c.with) parts.push("with " + c.with);
+  if (c.without) parts.push("no " + c.without);
+  return parts.join(" · ");
+}
+let comboTimer;
+function noteCombo() {
+  clearTimeout(comboTimer);
+  if (!hasFilters()) return;
+  const c = currentCombo(), key = comboKey(c);
+  comboTimer = setTimeout(() => {          // only count combinations you actually stay on
+    if (comboKey(currentCombo()) !== key) return;
+    const prev = S.combos[key] || { n: 0 };
+    S.combos[key] = { ...c, n: prev.n + 1, last: Date.now() };
+    const keys = Object.keys(S.combos);
+    if (keys.length > 40) {                  // keep the list small: drop the least used
+      keys.sort((a, b) => S.combos[a].n - S.combos[b].n || S.combos[a].last - S.combos[b].last).slice(0, keys.length - 40).forEach((k) => delete S.combos[k]);
+    }
+    commit();
+  }, 2500);
+}
+function applyCombo(c) {
+  Object.assign(SEARCH, { f: { ...EMPTY_F(), ...JSON.parse(JSON.stringify(c.f)) }, maxtime: c.maxtime || "", rating: c.rating || "",
+    with: c.with || "", without: c.without || "", shown: 48 });
 }
 
 function clearFilters() { Object.assign(SEARCH, { f: EMPTY_F(), maxtime: "", rating: "", with: "", without: "", shown: 48 }); runSearch(); }
@@ -284,7 +350,7 @@ function renderFilterBar() {
   const active = [];
   Object.entries(SEARCH.f).forEach(([g, vs]) => vs.forEach((v) => active.push(`<button class="apill" data-g="${g}" data-v="${esc(v)}">${g === "tag" ? "#" : ""}${esc(facetLabel(g, v))} ${ICON.x}</button>`)));
   if (SEARCH.maxtime) active.push(`<button class="apill" data-g="time">≤ ${SEARCH.maxtime} min ${ICON.x}</button>`);
-  if (SEARCH.rating) active.push(`<button class="apill" data-g="rating">${SEARCH.rating === "mine" ? "Rated by me" : "★ " + SEARCH.rating + "+"} ${ICON.x}</button>`);
+  if (SEARCH.rating) active.push(`<button class="apill" data-g="rating">${ratingLabel(SEARCH.rating)} ${ICON.x}</button>`);
   if (SEARCH.with.trim()) active.push(`<button class="apill" data-g="with">with ${esc(SEARCH.with)} ${ICON.x}</button>`);
   if (SEARCH.without.trim()) active.push(`<button class="apill" data-g="without">without ${esc(SEARCH.without)} ${ICON.x}</button>`);
   const btn = (g, label, n) => `<button class="fbtn ${n ? "on" : ""}" data-pop="${g}">${label}${n ? ` · ${n}` : ""} <span class="car">▾</span></button>`;
@@ -330,7 +396,7 @@ function openPop(g, anchor) {
       + `<p class="pnote">Times come from the recipe when it lists them; otherwise they're estimated from the steps (shown with ~).</p>`;
     $$("input", pop).forEach((i) => i.addEventListener("change", () => { SEARCH.maxtime = i.value; SEARCH.shown = 48; closePop(); runSearch(); }));
   } else if (g === "rating") {
-    const opts = [["", "Any rating"], ["3", "★ 3 & up"], ["4", "★ 4 & up"], ["4.5", "★ 4.5 & up"], ["mine", "Only recipes I've rated"]];
+    const opts = [["", "Any rating"], ["3", "★ 3 & up"], ["4", "★ 4 & up"], ["4.5", "★ 4.5 & up"], ["5", "★ 5 only"], ["mine", "Only recipes I've rated"]];
     pop.innerHTML = opts.map(([v, l]) => `<label class="opt"><input type="radio" name="rt" value="${v}" ${SEARCH.rating === v ? "checked" : ""}><span>${l}</span>${v && FACETS.rating?.[v] != null ? `<em>${FACETS.rating[v]}</em>` : ""}</label>`).join("")
       + `<p class="pnote">Uses your own stars when you've rated a recipe, otherwise the NYT Cooking / EatingWell rating. Rate any recipe from its page.</p>`;
     $$("input", pop).forEach((i) => i.addEventListener("change", () => { SEARCH.rating = i.value; SEARCH.shown = 48; closePop(); runSearch(); }));
@@ -382,8 +448,12 @@ async function renderHome(res) {
   const fav = S.favorites.slice().reverse();
   const recent = S.recent.slice(0, 6);
   const tags = Object.entries(usedTags()).sort((a, b) => b[1] - a[1]);
+  const usual = Object.entries(S.combos).sort((a, b) => b[1].n - a[1].n || b[1].last - a[1].last).slice(0, 6);
   res.innerHTML = `
     <div class="section-title"><h2>Browse</h2></div>
+    ${usual.length ? `<p class="eyebrow-sm">Your usual filters</p>
+    <div class="chips" style="justify-content:flex-start;margin-bottom:10px">${usual.map(([k, c]) => `<span class="chip usual" data-combo="${esc(k)}" role="button" tabindex="0" title="Used ${c.n}×">${esc(comboLabel(c))}<button class="forget" data-forget="${esc(k)}" aria-label="Forget this combination">${ICON.x}</button></span>`).join("")}</div>
+    <p class="eyebrow-sm">Ideas</p>` : ""}
     <div class="chips" style="justify-content:flex-start">${QUICK.map(([l], i) => `<button class="chip" data-quick="${i}">${l}</button>`).join("")}
       ${tags.map(([t, n]) => `<button class="chip tagchip" data-tagq="${esc(t)}">#${esc(t)} <em>${n}</em></button>`).join("")}</div>
     ${recent.length ? `<div class="section-title"><h2>Recently opened</h2></div><div class="results">${recent.map((c) => card(c)).join("")}</div>` : ""}
@@ -393,6 +463,14 @@ async function renderHome(res) {
   $("#shuffle").addEventListener("click", () => renderHome(res));
   $$("[data-quick]", res).forEach((b) => b.addEventListener("click", () => { SEARCH.f = EMPTY_F(); SEARCH.maxtime = ""; QUICK[+b.dataset.quick][1](); runSearch(); }));
   $$("[data-tagq]", res).forEach((b) => b.addEventListener("click", () => { SEARCH.f = EMPTY_F(); SEARCH.f.tag = [b.dataset.tagq]; runSearch(); }));
+  $$("[data-combo]", res).forEach((el) => {
+    const go = (e) => { if (e.target.closest("[data-forget]")) return; applyCombo(S.combos[el.dataset.combo]); runSearch(); };
+    el.addEventListener("click", go);
+    el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(e); } });
+  });
+  $$("[data-forget]", res).forEach((b) => b.addEventListener("click", (e) => {
+    e.stopPropagation(); delete S.combos[b.dataset.forget]; commit(); renderHome(res);
+  }));
   bindCards(res);
 }
 
@@ -610,7 +688,7 @@ function renderRecipe() {
       <button class="btn ${document.body.classList.contains("cooking") ? "on" : ""}" id="cook">${ICON.sun} Cook mode</button>
       <div class="scale" title="Scale the recipe">${[0.5, 1, 2, 3].map((f) => `<button data-f="${f}" class="${f === scale ? "on" : ""}">${f === 0.5 ? "½" : f}×</button>`).join("")}</div>
       <span class="sep"></span>
-      <button class="btn sm ${fav ? "on" : ""}" id="fav">${ICON.star(fav)} ${fav ? "Saved" : "Save"}</button>
+      <button class="btn sm ${fav ? "on" : ""}" id="fav">${ICON.star(fav)} ${fav ? "Favorited" : "Favorite"}</button>
       <button class="btn sm" id="toList">${ICON.cart} Shopping list</button>
       <button class="btn sm" id="toPlan">${ICON.cal} Plan</button>
     </div>
@@ -737,6 +815,32 @@ document.addEventListener("keydown", (e) => {
   if (["ArrowLeft", "ArrowUp"].includes(e.key)) { e.preventDefault(); CUR.setStep(CUR.prog.step - 1); }
 });
 
+/* ------------------------------------------------------------------ saved: favorites + recipes kept from websites */
+
+let SAVED_SITE = "";
+async function viewSaved() {
+  app.innerHTML = `<p class="empty"><span class="spin"></span></p>`;
+  const { results } = await api("/api/saved");
+  const fav = S.favorites.slice().reverse();
+  const sites = [...new Set(results.map((r) => r.site).filter(Boolean))].sort();
+  if (SAVED_SITE && !sites.includes(SAVED_SITE)) SAVED_SITE = "";
+  const shown = SAVED_SITE ? results.filter((r) => r.site === SAVED_SITE) : results;
+  app.innerHTML = `
+    <div class="section-title" style="margin-top:0"><h2 style="font-size:1.9rem">Saved</h2></div>
+    <div class="section-title"><h2>★ Favorites <span class="status">${fav.length}</span></h2></div>
+    ${fav.length ? `<div class="results" id="favs">${fav.map((c) => card(c)).join("")}</div>`
+      : `<p class="empty" style="text-align:left;padding:8px 0">Nothing yet. Tap <b>☆ Favorite</b> on any recipe to keep it here.</p>`}
+    <div class="section-title"><h2>From websites <span class="status">${results.length}</span></h2></div>
+    ${sites.length > 1 ? `<div class="chips" style="justify-content:flex-start;margin:0 0 12px">
+        <button class="chip ${SAVED_SITE ? "" : "on"}" data-site="">All</button>
+        ${sites.map((s) => `<button class="chip ${SAVED_SITE === s ? "on" : ""}" data-site="${esc(s)}">${esc(s)} <em>${results.filter((r) => r.site === s).length}</em></button>`).join("")}
+      </div>` : ""}
+    ${shown.length ? `<div class="results" id="webs">${shown.map((c) => card(c)).join("")}</div>`
+      : `<p class="empty" style="text-align:left;padding:8px 0">Recipes you open from NYT Cooking, EatingWell, Love &amp; Lemons, Skinnytaste, Yummy Toddler Food or a pasted link are kept here.</p>`}`;
+  $$("[data-site]").forEach((b) => b.addEventListener("click", () => { SAVED_SITE = b.dataset.site; viewSaved(); }));
+  bindCards(app);
+}
+
 /* ------------------------------------------------------------------ shopping list */
 
 const AISLES = [
@@ -821,22 +925,67 @@ const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const parseYmd = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 let weekStart = (() => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; })();
 
-function planModal(c, r, presetDate) {
+// Month grid for picking a day; days that already have meals show a dot.
+function calendarHTML(selected, month) {
+  const first = new Date(month.getFullYear(), month.getMonth(), 1);
+  const start = new Date(first); start.setDate(1 - ((first.getDay() + 6) % 7));   // back to Monday
   const today = ymd(new Date());
+  const cells = [...Array(42)].map((_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  const weeks = cells[35].getMonth() !== month.getMonth() ? cells.slice(0, 35) : cells;   // 5 rows when the month fits
+  return `<div class="cal-head">
+      <button type="button" class="cal-nav" data-m="-1" aria-label="Previous month">‹</button>
+      <b>${month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</b>
+      <button type="button" class="cal-nav" data-m="1" aria-label="Next month">›</button>
+    </div>
+    <div class="cal-grid" role="grid">
+      ${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => `<span class="cal-wd">${w}</span>`).join("")}
+      ${weeks.map((d) => {
+        const k = ymd(d), n = (S.plan[k] || []).length;
+        const cls = [d.getMonth() !== month.getMonth() ? "out" : "", k === today ? "today" : "", k === selected ? "sel" : "", k < today ? "past" : ""].join(" ");
+        return `<button type="button" class="cal-day ${cls}" data-d="${k}" aria-pressed="${k === selected}" aria-label="${d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}${n ? `, ${n} planned` : ""}">${d.getDate()}${n ? `<i>${"•".repeat(Math.min(n, 3))}</i>` : ""}</button>`;
+      }).join("")}
+    </div>`;
+}
+
+function planModal(c, r, presetDate) {
+  let day = presetDate || ymd(new Date());
+  let month = parseYmd(day); month.setDate(1);
+  let meal = "Dinner";
+  const dayLabel = () => parseYmd(day).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   openModal(`
     <h2>Add to meal plan</h2><p class="sub">${esc(c.title)}</p>
-    <label>Day</label><input type="date" id="pd" value="${presetDate || today}">
-    <label>Meal</label><select id="pm">${MEALS.map((m) => `<option ${m === "Dinner" ? "selected" : ""}>${m}</option>`).join("")}</select>
+    <div class="cal" id="cal"></div>
+    <label>Meal</label>
+    <div class="seg" id="pm" role="group" aria-label="Meal">${MEALS.map((m) => `<button type="button" data-meal="${m}" aria-pressed="${m === meal}">${m}</button>`).join("")}</div>
     <label style="display:flex;gap:8px;align-items:center;font-weight:500"><input type="checkbox" id="pg" checked style="width:auto;height:auto"> Also add it to Google Calendar</label>
-    <div class="row"><button class="btn" id="mc">Cancel</button><button class="btn primary" id="ma">Add to plan</button></div>`, () => {
+    <div class="row"><button class="btn" id="mc">Cancel</button><button class="btn primary" id="ma"></button></div>`, () => {
+    const draw = () => {
+      $("#cal").innerHTML = calendarHTML(day, month);
+      $("#ma").textContent = `Add to ${dayLabel()}`;
+    };
+    $("#cal").addEventListener("click", (e) => {
+      const nav = e.target.closest(".cal-nav"), cell = e.target.closest(".cal-day");
+      if (nav) { month = new Date(month.getFullYear(), month.getMonth() + +nav.dataset.m, 1); draw(); }
+      if (cell) {
+        day = cell.dataset.d;
+        const d = parseYmd(day);
+        if (d.getMonth() !== month.getMonth()) month = new Date(d.getFullYear(), d.getMonth(), 1);
+        draw();
+      }
+    });
+    $$("#pm button").forEach((b) => b.addEventListener("click", () => {
+      meal = b.dataset.meal;
+      $$("#pm button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    }));
+    draw();
     $("#mc").onclick = closeModal;
     $("#ma").onclick = () => {
-      const d = $("#pd").value, meal = $("#pm").value;
+      const toGcal = $("#pg").checked;
       const entry = { id: uid(), meal, card: c };
-      (S.plan[d] = S.plan[d] || []).push(entry);
+      (S.plan[day] = S.plan[day] || []).push(entry);
       commit(); closeModal();
-      if ($("#pg").checked) window.open(gcalUrl(d, entry, r), "_blank", "noopener");
-      toast(`Planned for ${parseYmd(d).toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}`);
+      if (toGcal) window.open(gcalUrl(day, entry, r), "_blank", "noopener");
+      toast(`Planned for ${dayLabel()}`);
       if (location.hash === "#/plan") viewPlan();
     };
   });
@@ -953,7 +1102,6 @@ async function exportIcs(days) {
 async function settingsModal() {
   const lib = await getLibrary(true);
   const info = await api("/api/info");
-  const bm = `javascript:(()=>{const b=[...document.querySelectorAll('script[type="application/ld+json"]')].map(s=>s.textContent);window.open('${location.origin}/#import='+encodeURIComponent(JSON.stringify({url:location.href,ld:b})))})()`;
   openModal(`
     <h2>Settings</h2>
     <label>Appearance</label>
@@ -965,8 +1113,8 @@ async function settingsModal() {
     ${lib.folders.map((f) => `<p style="margin:4px 0"><code>${esc(f)}</code></p>`).join("")}
     <p><button class="btn sm" id="ri">Rescan for new books</button> <button class="btn sm" id="rf">Re-read every book</button></p>
     <label>Save recipes from any website</label>
-    <p class="sub" style="margin:0">Drag this to your bookmarks bar. On any recipe page (NYT Cooking, EatingWell, Serious Eats…), click it to save the recipe into Miso.</p>
-    <a class="bm" href="${esc(bm)}" onclick="event.preventDefault();toast('Drag me to your bookmarks bar')">＋ Save to Miso</a>
+    <p class="sub" style="margin:0">A browser bookmark that saves the recipe you're looking at into Miso. Needed for sites that block apps, like Yummy Toddler Food.</p>
+    <p><button class="btn sm" id="bmSetup">Set up the Save to Miso bookmark</button></p>
     ${info.lan?.length ? `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Same Wi-Fi, open: ${info.lan.map((u) => `<code>${esc(u)}</code>`).join(" or ")}. Then Share → Add to Home Screen.</p>` : `<label>Use it on your iPad or phone</label><p class="sub" style="margin:0">Start Miso with the <b>Miso.command</b> launcher (it turns on Wi-Fi access).</p>`}
     <div class="row"><button class="btn primary" id="sd">Done</button></div>`, () => {
     $("#st").onchange = (e) => { S.settings.theme = e.target.value; applyTheme(); commit(); };
@@ -974,9 +1122,56 @@ async function settingsModal() {
     $("#ri").onclick = async () => { await post("/api/reindex", {}); closeModal(); location.hash = "#/library"; };
     $("#rf").onclick = async () => { await post("/api/reindex", { full: true }); closeModal(); location.hash = "#/library"; };
     $("#sd").onclick = closeModal;
+    $("#bmSetup").onclick = bookmarkletModal;
   });
 }
 $("#settingsBtn").addEventListener("click", settingsModal);
+
+// The bookmark sends the page's recipe data (schema.org JSON-LD) to Miso. Only recipe blocks are sent,
+// to keep the link short; if a pop-up blocker stops the new tab, it opens Miso in the same tab.
+function bookmarkletCode() {
+  return `javascript:(()=>{const b=[...document.querySelectorAll('script[type="application/ld+json"]')].map(s=>s.textContent).filter(t=>/Recipe/.test(t));`
+    + `if(!b.length){alert('Miso could not find a recipe on this page.');return}`
+    + `const u='${location.origin}/#import='+encodeURIComponent(JSON.stringify({url:location.href,ld:b}));if(!window.open(u))location.href=u})()`;
+}
+function bookmarkletModal() {
+  const code = bookmarkletCode();
+  openModal(`
+    <h2>Save to Miso bookmark</h2>
+    <p class="sub">Once it's in your bookmarks, open any recipe page and click it to save that recipe into Miso.</p>
+    <label>Chrome, Dia, Arc, Edge or Firefox</label>
+    <p class="sub" style="margin:0">Show the bookmarks bar (⌘⇧B), then drag this button onto it:</p>
+    <a class="bm" href="${esc(code)}" onclick="event.preventDefault();toast('Drag it to the bookmarks bar, or use Copy below')">＋ Save to Miso</a>
+    <p class="sub" style="margin:6px 0 0">If the drag doesn't stick (Dia does this):</p>
+    <ol class="sub steps-mini">
+      <li>Click <b>Copy bookmark code</b> below.</li>
+      <li>Bookmark any page (⌘D), naming it <b>Save to Miso</b>.</li>
+      <li>Open your bookmarks (try typing <code>chrome://bookmarks</code> in the address bar), find <b>Save to Miso</b>, choose <b>Edit</b>, and paste the code in place of its address (URL).</li>
+    </ol>
+    <label>Safari on Mac (dragging doesn't work in Safari)</label>
+    <ol class="sub steps-mini">
+      <li>Click <b>Copy bookmark code</b> below.</li>
+      <li>Press <b>⌘D</b> to bookmark this page. Name it <b>Save to Miso</b>, put it in <b>Favorites</b>, click Add.</li>
+      <li>Choose <b>Bookmarks ▸ Edit Bookmarks</b>, Control-click <b>Save to Miso</b>, choose <b>Edit Address</b>, paste, and press Return.</li>
+    </ol>
+    <label>iPad or iPhone (Safari)</label>
+    <ol class="sub steps-mini">
+      <li>Copy the code below (tap the box, Select All, Copy).</li>
+      <li>Tap Share ▸ <b>Add Bookmark</b>, name it <b>Save to Miso</b>, save.</li>
+      <li>Open Bookmarks ▸ Edit, tap <b>Save to Miso</b>, replace the address with the code, tap Done.</li>
+    </ol>
+    <label for="bmCode">Bookmark code</label>
+    <textarea id="bmCode" readonly rows="3" style="width:100%;font:12px ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);padding:8px;resize:none">${esc(code)}</textarea>
+    <div class="row"><button class="btn" id="bmCopy">Copy bookmark code</button><button class="btn primary" id="bmDone">Done</button></div>`, () => {
+    const ta = $("#bmCode");
+    ta.addEventListener("focus", () => ta.select());
+    $("#bmCopy").onclick = async () => {
+      try { await navigator.clipboard.writeText(code); toast("Copied — now paste it as the bookmark's address"); }
+      catch (e) { ta.focus(); ta.select(); toast("Selected — press ⌘C (or tap Copy) to copy it"); }
+    };
+    $("#bmDone").onclick = closeModal;
+  });
+}
 
 /* ------------------------------------------------------------------ router */
 
@@ -987,6 +1182,7 @@ const ROUTES = [
   [/^#\/r\/(.+)$/, (id) => viewRecipe(decodeURIComponent(id)), "search"],
   [/^#\/plan$/, viewPlan, "plan"],
   [/^#\/list$/, viewList, "list"],
+  [/^#\/saved$/, viewSaved, "saved"],
 ];
 
 async function route() {

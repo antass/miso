@@ -7,6 +7,7 @@ Run:  python3 server.py            (http://localhost:8137)
 Stdlib only. Indexes EPUB (and MOBI/AZW3 via Calibre) cookbooks, serves the web app in ./static.
 """
 import glob
+import concurrent.futures
 import gzip
 import hashlib
 import io
@@ -20,6 +21,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -34,6 +36,7 @@ CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 STATE_PATH = os.path.join(APP_DIR, "data", "state.json")
 CACHE = os.path.expanduser("~/Library/Application Support/Miso")
 INDEX_VERSION = 5
+FACETS_VERSION = 3          # bump when facets.py changes, so saved facets are recomputed
 
 DEFAULT_CONFIG = {
     "port": 8137,
@@ -79,6 +82,7 @@ class Library:
         self.problems = []     # [{file, reason}]
         self.status = {"state": "idle", "done": 0, "total": 0, "current": ""}
         self.lock = threading.Lock()
+        self._prep = {}            # (book id, version) → prepared recipes
         os.makedirs(os.path.join(CACHE, "books"), exist_ok=True)
         os.makedirs(os.path.join(CACHE, "covers"), exist_ok=True)
         os.makedirs(os.path.join(CACHE, "converted"), exist_ok=True)
@@ -105,32 +109,81 @@ class Library:
         t = threading.Thread(target=self._index_all, daemon=True)
         t.start()
 
+    def _book_sig(self, path):
+        st = os.stat(path)
+        return hashlib.sha1(path.encode()).hexdigest()[:10], f"{INDEX_VERSION}:{st.st_size}:{int(st.st_mtime)}", st.st_size
+
+    def _cached(self, path):
+        """The cache entry for this exact file version: a book, a failure record, or None (needs reading)."""
+        bid, sig, _ = self._book_sig(path)
+        cache_file = os.path.join(CACHE, "books", bid + ".json")
+        if os.path.exists(cache_file):
+            try:
+                with open(cache_file) as f:
+                    cached = json.load(f)
+            except ValueError:
+                return None
+            if cached.get("sig") == sig:
+                return cached
+        return None
+
+    def _remember_failure(self, path, error):
+        bid, sig, _ = self._book_sig(path)
+        with open(os.path.join(CACHE, "books", bid + ".json"), "w") as f:
+            json.dump({"id": bid, "sig": sig, "path": path, "error": error, "count": 0}, f)
+
     def _index_all(self):
+        """Load everything already indexed in one quick pass, then read only new, changed or never-read books."""
         files = self.files()
-        self.status = {"state": "indexing", "done": 0, "total": len(files), "current": ""}
-        books, problems = {}, []
-        for i, (path, mixed) in enumerate(files):
+        books, problems, todo = {}, [], []
+
+        def add(book, path, mixed):
+            if book.get("error"):
+                if not mixed:
+                    problems.append({"file": os.path.basename(path), "reason": book["error"]})
+            elif not book.get("count"):
+                if not mixed:
+                    problems.append({"file": os.path.basename(path), "reason": "No recipes found"})
+            elif mixed and book["count"] < self.cfg["min_recipes_mixed"]:
+                pass        # not a cookbook
+            else:
+                key = norm_title(book["title"])
+                prev = books.get(key)
+                if not prev or book["count"] > prev["count"]:
+                    books[key] = book
+
+        self.status = {"state": "loading", "done": 0, "total": 0, "current": ""}
+        for path, mixed in files:
+            try:
+                cached = self._cached(path)
+            except OSError:
+                cached = None
+            if cached is not None:
+                add(cached, path, mixed)
+            else:
+                todo.append((path, mixed))
+        self._publish(books, problems)          # the whole known library is searchable now
+
+        self.status = {"state": "indexing" if todo else "ready", "done": 0, "total": len(todo), "current": ""}
+        for i, (path, mixed) in enumerate(todo):
             self.status["current"] = os.path.basename(path)
             try:
                 book = self._load_book(path)
-                if mixed and (book is None or book["count"] < self.cfg["min_recipes_mixed"]):
-                    pass        # not a cookbook
-                elif book is None:
-                    problems.append({"file": os.path.basename(path), "reason": "No recipes found"})
-                else:
-                    key = norm_title(book["title"])
-                    prev = books.get(key)
-                    if not prev or book["count"] > prev["count"]:
-                        books[key] = book
+                add(book, path, mixed)
             except Exception as e:
+                reason = _friendly_error(e)
+                try:
+                    self._remember_failure(path, reason)   # don't retry until the file changes
+                except OSError:
+                    pass
                 if not mixed:
-                    problems.append({"file": os.path.basename(path), "reason": _friendly_error(e)})
+                    problems.append({"file": os.path.basename(path), "reason": reason})
             self.status["done"] = i + 1
-            self._publish(books, problems)   # make results searchable as they arrive
+            self._publish(books, problems)
         have = {norm_title(os.path.splitext(b["path"])[0].split("/")[-1].split(" - ")[0]) for b in books.values()} | set(books)
         problems = [p for p in problems if norm_title(os.path.splitext(p["file"])[0].split(" - ")[0]) not in have]
         self._publish(books, problems)
-        self.status = {"state": "ready", "done": len(files), "total": len(files), "current": ""}
+        self.status = {"state": "ready", "done": len(todo), "total": len(todo), "current": ""}
         threading.Thread(target=self._warm_thumbs, daemon=True).start()
 
     def _warm_thumbs(self):
@@ -152,19 +205,43 @@ class Library:
             except Exception:
                 pass
 
+    def _prepared(self, b):
+        """A book's recipes with search fields and facets, computed once per book version (kept on disk)."""
+        key = (b["id"], b["sig"])
+        if key in self._prep:
+            return self._prep[key]
+        fp = os.path.join(CACHE, "facets", b["id"] + ".json")
+        saved = None
+        if os.path.exists(fp):
+            try:
+                with open(fp) as f:
+                    saved = json.load(f)
+            except ValueError:
+                saved = None
+        stamp = f"{b['sig']}|{FACETS_VERSION}"
+        fac = saved["facets"] if saved and saved.get("stamp") == stamp and len(saved.get("facets", [])) == len(b["recipes"]) else None
+        out = []
+        for n, r in enumerate(b["recipes"]):
+            r = dict(r, id=f"{b['id']}-{n}", book=b["id"], source="book")
+            r["_t"] = r["title"].lower()
+            r["_i"] = " | ".join(i["t"] for i in r["ingredients"] if not i.get("h")).lower()
+            r["_b"] = b["title"].lower()
+            r["_f"] = fac[n] if fac else facets.compute(r, b["title"])
+            out.append(r)
+        if not fac:
+            os.makedirs(os.path.dirname(fp), exist_ok=True)
+            with open(fp, "w") as f:
+                json.dump({"stamp": stamp, "facets": [r["_f"] for r in out]}, f)
+        self._prep[key] = out
+        return out
+
     def _publish(self, books_by_title, problems):
         books, recipes, order = {}, {}, []
         for b in sorted(books_by_title.values(), key=lambda b: b["title"].lower()):
             books[b["id"]] = {k: v for k, v in b.items() if k != "recipes"}
-            for n, r in enumerate(b["recipes"]):
-                rid = f"{b['id']}-{n}"
-                r = dict(r, id=rid, book=b["id"], source="book")
-                r["_t"] = r["title"].lower()
-                r["_i"] = " | ".join(i["t"] for i in r["ingredients"] if not i.get("h")).lower()
-                r["_b"] = b["title"].lower()
-                r["_f"] = facets.compute(r, b["title"])
-                recipes[rid] = r
-                order.append(rid)
+            for r in self._prepared(b):
+                recipes[r["id"]] = r
+                order.append(r["id"])
         with self.lock:
             self.books, self.recipes, self.order, self.problems = books, recipes, order, problems
 
@@ -222,7 +299,8 @@ class Library:
     GROUPS = {"course": "or", "protein": "or", "method": "or", "book": "or", "diet": "and", "tag": "and"}
     TIME_BUCKETS = [15, 30, 45, 60, 90]
 
-    def search(self, p, web_recipes=(), tags=None, my_ratings=None):
+    def search(self, p, web_recipes=(), tags=None, my_ratings=None, external=None):
+        """external: an already-ranked list of recipes (live web results) to filter instead of the library."""
         tags = tags or {}
         my_ratings = my_ratings or {}
         minrating = p.get("rating") or ""
@@ -244,7 +322,9 @@ class Library:
             books_pool = [self.recipes[i] for i in self.order]
         pool = {"books": books_pool, "web": list(web_recipes)}.get(mode, books_pool + list(web_recipes))
         filtering = any(sel.values()) or maxtime or with_ or without or minrating
-        if not q and not filtering:
+        if external is not None:
+            pool, q, mode = external, "", "external"
+        elif not q and not filtering:
             return {"results": [], "total": 0, "facets": {}}
 
         def vals(r, g):
@@ -272,8 +352,8 @@ class Library:
                     return False
             if with_ and not all(w in r["_i"] for w in with_):
                 return False
-            if without and any(w in r["_i"] or w in r["_t"] for w in without):
-                return False
+            if without and (not r["_i"] or any(w in r["_i"] or w in r["_t"] for w in without)):
+                return False          # unknown ingredients can't be shown to leave something out
             return True
 
         # text relevance (or pantry matching) first
@@ -309,6 +389,8 @@ class Library:
                     if q in r["_t"]:
                         score += 15
                     scored.append((score, r, None))
+        elif mode == "external":
+            scored = [(len(pool) - i, r, None) for i, r in enumerate(pool)]   # keep the site's own order
         else:
             scored = [(0, r, None) for r in pool]
 
@@ -334,7 +416,7 @@ class Library:
         for _, r, _ in scored:
             if passes(r, skip="rating"):
                 v = rating_of(r)
-                for th in ("3", "4", "4.5"):
+                for th in ("3", "4", "4.5", "5"):
                     if v >= float(th):
                         rc[th] = rc.get(th, 0) + 1
                 if r["id"] in my_ratings:
@@ -354,7 +436,7 @@ class Library:
         elif sort == "random":
             import random
             random.shuffle(matched)
-        elif q or mode == "pantry":
+        elif q or mode in ("pantry", "external"):
             matched.sort(key=lambda x: (-x[0], len(x[1]["_t"])))
         else:
             matched.sort(key=lambda x: x[1]["_t"])
@@ -378,7 +460,7 @@ class Library:
                      image=f"/api/img/{r['book']}?w=320&p={urllib.parse.quote(r['images'][0])}" if r.get("images") else None)
         else:
             rt = r.get("rating") or {}
-            c.update(site=r.get("site"), image=r.get("image"), author=r.get("author"),
+            c.update(site=r.get("site"), image=r.get("image"), author=r.get("author"), url=r.get("url"),
                      rating=rt.get("value"), ratingCount=rt.get("count"))
         if extra:
             c.update(extra)
@@ -409,6 +491,90 @@ class Library:
         with self.lock:
             ids = random.sample(self.order, min(n, len(self.order)))
         return [self.card(self.recipes[i]) for i in ids]
+
+
+# ------------------------------------------------------------------ live web results → filterable recipes
+
+WEB_CACHE = os.path.join(CACHE, "web")
+FILTER_KEYS = ("course", "protein", "diet", "method", "book", "tag", "maxtime", "rating", "with", "without")
+YTF_COURSE = {"Breakfast": "Breakfast", "Muffins": "Breakfast", "Dinner": "Mains", "Snacks": "Snacks & appetizers",
+              "Desserts": "Desserts", "Side Dish": "Sides"}
+YTF_DIET = {"Vegetarian": "Vegetarian", "Vegan": "Vegan", "Dairy-Free": "Dairy-free", "Gluten-Free": "Gluten-free*"}
+
+
+def _web_cache_path(url):
+    return os.path.join(WEB_CACHE, hashlib.sha1(url.encode()).hexdigest() + ".json")
+
+
+def cached_web_recipe(url):
+    fp = _web_cache_path(url)
+    if os.path.exists(fp) and time.time() - os.path.getmtime(fp) < 30 * 86400:
+        with open(fp) as f:
+            return json.load(f)
+    return None
+
+
+def cache_web_recipe(rec):
+    os.makedirs(WEB_CACHE, exist_ok=True)
+    with open(_web_cache_path(rec["url"]), "w") as f:
+        json.dump(rec, f)
+
+
+# Sites that start refusing requests (HTTP 403/429) are left alone for a while instead of retried.
+SITE_BACKOFF = {}           # site name → time.time() when we may ask again
+BACKOFF_SECONDS = 600
+
+
+def site_resting(site):
+    return SITE_BACKOFF.get(site, 0) > time.time()
+
+
+def rest_site(site):
+    SITE_BACKOFF[site] = time.time() + BACKOFF_SECONDS
+
+
+def full_web_recipe(hit):
+    """A search hit → full recipe with facets. Sites that block page reads get what their listing says."""
+    url = hit["url"]
+    rec = hit.get("_recipe") or cached_web_recipe(url)
+    if rec is None and not hit.get("cats") and not site_resting(hit.get("site")) and hit.get("_fetch", True):
+        try:
+            rec = web.import_recipe(url)
+        except web.Blocked:
+            rest_site(hit.get("site")); rec = None
+        except urllib.error.HTTPError as e:
+            if e.code in (403, 429):
+                rest_site(hit.get("site"))
+            rec = None
+        except Exception:
+            rec = None
+    if rec is not None:
+        if hit.get("_recipe"):
+            cache_web_recipe(rec)
+        elif not os.path.exists(_web_cache_path(url)):
+            cache_web_recipe(rec)
+        f = facets.compute(rec, rec.get("site") or "")
+        extra_course = [c for c in (rec.get("siteCourses") or []) if c in ("Breakfast", "Dessert", "Desserts", "Snack", "Side Dish")]
+        if extra_course:
+            f["course"] = sorted(set(f["course"]) | {{"Dessert": "Desserts", "Snack": "Snacks & appetizers", "Side Dish": "Sides"}.get(c, c) for c in extra_course})
+    else:
+        # only a title and the site's labels (e.g. Yummy Toddler Food): don't guess diet from missing ingredients
+        rec = {"id": "w-" + hashlib.sha1(url.encode()).hexdigest()[:10], "source": "web", "title": hit["title"], "site": hit.get("site"),
+               "url": url, "image": hit.get("image"), "author": "", "rating": None, "meta": [], "headnote": [],
+               "ingredients": [], "steps": [], "notes": [], "images": []}
+        f = facets.compute(rec, "")
+        cats = hit.get("cats") or []
+        f["course"] = sorted(set(f["course"]) | {YTF_COURSE[c] for c in cats if c in YTF_COURSE})
+        f["diet"] = sorted({YTF_DIET[c] for c in cats if c in YTF_DIET})
+        f["method"] = ["Freezer-friendly"] if any("freez" in c.lower() for c in cats) else []
+    if not rec.get("rating") and hit.get("rating"):
+        rec = dict(rec, rating={"value": float(hit["rating"]), "count": int(hit.get("ratingCount") or 0)})
+    r = dict(rec)
+    r["_t"] = r["title"].lower()
+    r["_i"] = " | ".join(i["t"] for i in r.get("ingredients", []) if not i.get("h")).lower()
+    r["_b"] = (r.get("site") or "").lower()
+    r["_f"] = f
+    return r
 
 
 _EPUBS, _EPUB_LOCK = {}, threading.Lock()
@@ -459,7 +625,9 @@ class State:
 
     def add_web(self, rec):
         with self.lock:
-            self.data.setdefault("web", {})[rec["id"]] = rec
+            old = self.data.setdefault("web", {}).get(rec["id"]) or {}
+            rec = dict(rec, savedAt=old.get("savedAt") or rec.get("savedAt") or time.strftime("%Y-%m-%dT%H:%M:%S"))
+            self.data["web"][rec["id"]] = rec
             data = self.data
         self.save(data)
 
@@ -542,6 +710,17 @@ class Handler(BaseHTTPRequestHandler):
             res = self.lib.search(qs, web_recipes=self.state.web_recipes(), tags=self.state.data.get("tags") or {},
                                   my_ratings=self.state.data.get("ratings") or {})
             return self._send(200, res)
+        if p == "/api/saved":
+            tags, ratings = self.state.data.get("tags") or {}, self.state.data.get("ratings") or {}
+            recs = sorted(self.state.web_recipes(), key=lambda r: r.get("savedAt") or "", reverse=True)
+            out = []
+            for r in recs:
+                c = self.lib.card(r, tags=tags)
+                c["savedAt"] = r.get("savedAt")
+                if r["id"] in ratings:
+                    c["myRating"] = ratings[r["id"]]
+                out.append(c)
+            return self._send(200, {"results": out})
         if p == "/api/random":
             return self._send(200, {"results": self.lib.random(int(qs.get("n", 6)))})
         if p.startswith("/api/recipe/"):
@@ -593,11 +772,35 @@ class Handler(BaseHTTPRequestHandler):
             site, q = qs.get("site", "nyt"), qs.get("q", "")
             if site not in web.SITES:
                 return self._send(400, {"error": "unknown site"})
+            name = web.SITES[site][0]
+            if site_resting(name):
+                return self._send(200, {"results": [], "error": "resting", "message": f"{name} asked Miso to slow down. Try again in a few minutes."})
             try:
                 res = web.search(site, q)
+            except urllib.error.HTTPError as e:
+                if e.code in (403, 429):
+                    rest_site(name)
+                    return self._send(200, {"results": [], "error": "resting", "message": f"{name} asked Miso to slow down. Try again in a few minutes."})
+                return self._send(200, {"results": [], "error": str(e)[:120]})
             except Exception as e:
                 return self._send(200, {"results": [], "error": str(e)[:120]})
-            return self._send(200, {"results": res})
+            wants_filter = any(qs.get(k) for k in FILTER_KEYS) or qs.get("sort") in ("rating", "time", "ingredients")
+            if not wants_filter:
+                return self._send(200, {"results": [{k: v for k, v in h.items() if k not in ("_recipe", "cats")} for h in res]})
+            # filters apply to web results too: get each recipe's details (cached), then filter like the library
+            # be gentle with sites whose recipe pages we have to read: top 20 only, 3 at a time (cached afterwards)
+            for i, h in enumerate(res):
+                h["_fetch"] = i < 20
+            res = [h for h in res if h["_fetch"] or h.get("_recipe") or h.get("cats") or cached_web_recipe(h["url"])]
+            with concurrent.futures.ThreadPoolExecutor(3) as ex:
+                recs = list(ex.map(full_web_recipe, res))
+            out = self.lib.search(dict(qs, limit=qs.get("limit") or "60"), external=recs,
+                                  tags=self.state.data.get("tags") or {}, my_ratings=self.state.data.get("ratings") or {})
+            saved = self.state.data.get("web", {})
+            for c in out["results"]:
+                if c["id"] not in saved:
+                    c.pop("id")          # not saved yet: tapping it imports via its url
+            return self._send(200, out)
         if p == "/api/info":
             return self._send(200, {"lan": lan_urls(self.server.server_address[1]) if LAN else []})
         # static files
@@ -621,7 +824,9 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/web/import":
             body = self._json_body()
             try:
-                rec = web.import_recipe(body.get("url"), body.get("ld"))
+                cached = None if body.get("ld") else cached_web_recipe(body.get("url") or "")
+                rec = cached or web.import_recipe(body.get("url"), body.get("ld"))
+                rec = {k: v for k, v in rec.items() if k != "siteCourses"}
             except web.Blocked as e:
                 return self._send(200, {"blocked": True, "site": e.site, "url": body.get("url")})
             except Exception as e:
@@ -631,8 +836,10 @@ class Handler(BaseHTTPRequestHandler):
         if p == "/api/reindex":
             if self.lib.status.get("state") != "indexing":
                 if self._json_body().get("full"):
-                    shutil.rmtree(os.path.join(CACHE, "books"), ignore_errors=True)
-                    os.makedirs(os.path.join(CACHE, "books"), exist_ok=True)
+                    for d in ("books", "facets"):
+                        shutil.rmtree(os.path.join(CACHE, d), ignore_errors=True)
+                        os.makedirs(os.path.join(CACHE, d), exist_ok=True)
+                    self.lib._prep.clear()
                 self.lib.cfg = load_config()
                 self.lib.start()
             return self._send(200, {"ok": True})
