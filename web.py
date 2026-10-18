@@ -31,7 +31,8 @@ def fetch(url, timeout=15):
 def site_name(url):
     host = urllib.parse.urlparse(url or "").netloc.lower().replace("www.", "")
     return {"cooking.nytimes.com": "NYT Cooking", "nytimes.com": "NYT Cooking",
-            "eatingwell.com": "EatingWell"}.get(host, host)
+            "eatingwell.com": "EatingWell", "loveandlemons.com": "Love & Lemons",
+            "skinnytaste.com": "Skinnytaste", "yummytoddlerfood.com": "Yummy Toddler Food"}.get(host, host)
 
 
 # ------------------------------------------------------------------ search
@@ -85,12 +86,69 @@ def search_eatingwell(q):
         if sr:
             full = len(re.findall(r'class="icon icon-star\s*"', sr.group(0)))
             half = len(re.findall(r'icon-star-half', sr.group(0)))
-            stars = full + 0.5 * half or None
+            stars = min(5.0, full + 0.5 * half) or None
         tm = re.search(r'card-meta__time-text[^>]*>\s*([^<]+?)\s*<', body)
         out.append({"title": html.unescape(t.group(1)).strip(), "url": href, "image": img.group(1) if img else None,
                     "byline": html.unescape(by.group(1)) if by else "", "site": "EatingWell",
                     "rating": stars, "time": tm.group(1) if tm else None})
     return out[:40]
+
+
+def _rank_by_title(results, q):
+    """WordPress search matches anywhere in a post; list recipes named after the query first."""
+    words = [w for w in re.findall(r"[a-z]+", q.lower()) if len(w) > 2]
+    return sorted(results, key=lambda r: -sum(w in r["title"].lower() for w in words))
+
+
+def search_wprm(domain, name, q):
+    """Sites built on WP Recipe Maker expose their recipe cards through the WordPress REST API."""
+    data = json.loads(fetch(f"https://{domain}/wp-json/wp/v2/wprm_recipe?per_page=30&search=" + urllib.parse.quote(q)))
+    out, seen = [], set()
+    for item in data:
+        rec, link = item.get("recipe") or {}, item.get("link")
+        if not link or link in seen or not rec.get("name"):
+            continue
+        seen.add(link)
+        rating = rec.get("rating") or {}
+        mins = int(rec.get("total_time") or 0)
+        out.append({"title": html.unescape(rec["name"]), "url": link, "image": rec.get("image_url") or None, "site": name,
+                    "byline": html.unescape(re.sub(r"<[^>]+>", "", rec.get("summary") or ""))[:140],
+                    "rating": round(float(rating["average"]), 1) if rating.get("average") else None,
+                    "ratingCount": int(rating["count"]) if rating.get("count") else None,
+                    "time": (f"{mins // 60} hr {mins % 60} min".replace(" 0 min", "") if mins >= 60 else f"{mins} min") if mins else None})
+    return _rank_by_title(out, q)[:40]
+
+
+def search_yummy_toddler_food(q):
+    """This site blocks automated page requests, but its WordPress search feed is open."""
+    s = fetch("https://www.yummytoddlerfood.com/feed/?s=" + urllib.parse.quote_plus(q))
+    out = []
+    for item in re.findall(r"<item>(.*?)</item>", s, re.S):
+        cats = [html.unescape(c) for c in re.findall(r"<category><!\[CDATA\[(.*?)\]\]></category>", item)]
+        if cats and "Recipes" not in cats:
+            continue                    # meal plans, FAQs, round-up posts
+        title = re.search(r"<title>(.*?)</title>", item, re.S)
+        link = re.search(r"<link>(.*?)</link>", item, re.S)
+        img = re.search(r'<img[^>]+src="([^"]+)"', item)
+        if title and link:
+            out.append({"title": html.unescape(re.sub(r"<!\[CDATA\[|\]\]>", "", title.group(1))).strip(), "url": link.group(1).strip(),
+                        "image": img.group(1) if img else None, "site": "Yummy Toddler Food",
+                        "byline": ", ".join(c for c in cats if c != "Recipes")[:120]})
+    return _rank_by_title(out, q)
+
+
+SITES = {
+    "nyt": ("NYT Cooking", search_nyt),
+    "ew": ("EatingWell", search_eatingwell),
+    "lal": ("Love & Lemons", lambda q: search_wprm("www.loveandlemons.com", "Love & Lemons", q)),
+    "st": ("Skinnytaste", lambda q: search_wprm("www.skinnytaste.com", "Skinnytaste", q)),
+    "ytf": ("Yummy Toddler Food", search_yummy_toddler_food),
+}
+
+
+def search(site, q):
+    name, fn = SITES[site]
+    return fn(q)
 
 
 # ------------------------------------------------------------------ import

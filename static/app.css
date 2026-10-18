@@ -96,6 +96,9 @@ main { max-width: 1120px; margin: 0 auto; padding: 28px 20px 80px; }
 .site-ph { width: 74px; height: 74px; flex: none; border-radius: 8px; display: grid; place-items: center; font: 600 .78rem/1.1 var(--serif); text-align: center; padding: 6px; }
 .site-nyt { background: #111; color: #fff; }
 .site-ew { background: #2E7D4F; color: #fff; }
+.site-lal { background: #F2C230; color: #2B2410; }
+.site-st { background: #E5426B; color: #fff; }
+.site-ytf { background: #3C8FB5; color: #fff; }
 .pill { display: inline-block; font-size: .72rem; font-weight: 600; padding: 2px 7px; border-radius: 999px; background: var(--sunk); color: var(--ink-2); margin-left: 6px; vertical-align: 2px; }
 .pill.ok { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
 .empty { text-align: center; color: var(--ink-3); padding: 40px 0; }

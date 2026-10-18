@@ -8,7 +8,7 @@
 - **Search** every recipe in your EPUB/MOBI cookbooks by title, ingredient, or book. Each result shows the cover of the book it came from.
 - **Filters:** course, protein, diet, method (air fryer, slow cooker, freezer-friendly, make-ahead…), time, source, your own tags, and ingredients to include or leave out.
 - **Tags:** add your own (Kid-approved, Weeknight…) on any recipe, then filter by them.
-- **Everything** searches your cookbooks and saved recipes, plus live NYT Cooking and EatingWell results. You can also search either site on its own. Tap a result to import it. Imported recipes stay searchable offline.
+- **Everything** searches your cookbooks and saved recipes, plus live results from NYT Cooking, EatingWell, Love & Lemons, Skinnytaste and Yummy Toddler Food. You can also search any one site on its own. Yummy Toddler Food blocks apps from reading its recipe pages, so save those with the Save to Miso bookmark (Settings). Tap a result to import it. Imported recipes stay searchable offline.
 - **Paste any recipe link** into the search box to import it. This works on most recipe sites.
 - **Cook mode:** keeps the screen awake, makes the text bigger, and adds a step-by-step bar. You can also use ←/→ or Space on a keyboard.
 - Tap ingredients to **check them off**. Tap a step to **highlight where you are**.

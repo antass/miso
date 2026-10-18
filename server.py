@@ -591,7 +591,12 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, {k: v for k, v in self.state.data.items() if k != "web"})
         if p == "/api/web/search":
             site, q = qs.get("site", "nyt"), qs.get("q", "")
-            res = web.search_nyt(q) if site == "nyt" else web.search_eatingwell(q)
+            if site not in web.SITES:
+                return self._send(400, {"error": "unknown site"})
+            try:
+                res = web.search(site, q)
+            except Exception as e:
+                return self._send(200, {"results": [], "error": str(e)[:120]})
             return self._send(200, {"results": res})
         if p == "/api/info":
             return self._send(200, {"lan": lan_urls(self.server.server_address[1]) if LAN else []})

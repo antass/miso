@@ -72,7 +72,10 @@ modal.addEventListener("click", (e) => { if (e.target === modal) closeModal(); }
 
 /* ------------------------------------------------------------------ cards */
 
-const SITE_CLASS = { "NYT Cooking": "site-nyt", EatingWell: "site-ew" };
+// live recipe websites Miso can search (keys match web.SITES on the server)
+const WEB_SITES = [["nyt", "NYT Cooking"], ["ew", "EatingWell"], ["lal", "Love & Lemons"], ["st", "Skinnytaste"], ["ytf", "Yummy Toddler Food"]];
+const WEB_NAME = Object.fromEntries(WEB_SITES);
+const SITE_CLASS = { "NYT Cooking": "site-nyt", EatingWell: "site-ew", "Love & Lemons": "site-lal", Skinnytaste: "site-st", "Yummy Toddler Food": "site-ytf" };
 function sitePh(site) { return `<div class="site-ph ${SITE_CLASS[site] || "site-nyt"}">${esc(site || "Web")}</div>`; }
 function coverImg(c, cls = "cover") {
   return c.cover ? `<img class="${cls}" src="${esc(c.cover)}" alt="" loading="lazy">` : `<div class="cover-ph">${esc(c.bookTitle || "")}</div>`;
@@ -129,7 +132,7 @@ const EMPTY_F = () => ({ course: [], protein: [], diet: [], method: [], book: []
 const SEARCH = { q: "", mode: "all", f: EMPTY_F(), maxtime: "", rating: "", with: "", without: "", sort: "relevance", shown: 48 };
 const MODES = [
   ["all", "Everything"], ["books", "My cookbooks"], ["web", "Saved recipes"],
-  ["nyt", "NYT Cooking"], ["ew", "EatingWell"],
+  ...WEB_SITES,
 ];
 const GROUP_LABEL = { course: "Course", protein: "Protein", diet: "Diet", method: "Method", book: "Source", tag: "My tags" };
 const SORTS = [["relevance", "Best match"], ["rating", "Top rated"], ["time", "Quickest"], ["ingredients", "Fewest ingredients"], ["title", "A–Z"], ["random", "Surprise me"]];
@@ -140,7 +143,7 @@ async function getLibrary(force) {
   if (!LIB || force) LIB = await api("/api/library");
   return LIB;
 }
-const isWebMode = () => SEARCH.mode === "nyt" || SEARCH.mode === "ew";
+const isWebMode = () => SEARCH.mode in WEB_NAME;
 const hasFilters = () => Object.values(SEARCH.f).some((v) => v.length) || SEARCH.maxtime || SEARCH.rating || SEARCH.with.trim() || SEARCH.without.trim();
 function allTags() { return [...new Set([...Object.values(S.tags).flat(), ...DEFAULT_TAGS])].sort((a, b) => a.localeCompare(b)); }
 function usedTags() { const c = {}; Object.values(S.tags).flat().forEach((t) => (c[t] = (c[t] || 0) + 1)); return c; }
@@ -161,7 +164,7 @@ async function viewSearch() {
   const lib = await getLibrary(true);
   if (!MODES.some(([k]) => k === SEARCH.mode)) SEARCH.mode = "all";
   const placeholder = {
-    nyt: "Search NYT Cooking", ew: "Search EatingWell",
+    ...Object.fromEntries(WEB_SITES.map(([k, n]) => [k, `Search ${n}`])),
   }[SEARCH.mode] || "Search recipes, ingredients, tags — or paste a recipe link";
   app.innerHTML = `
     <section class="hero">
@@ -199,8 +202,8 @@ async function runSearch() {
     const { results } = await api(`/api/web/search?site=${SEARCH.mode}&q=${encodeURIComponent(val)}`);
     if (seq !== searchSeq) return;
     res.innerHTML = results.length
-      ? `<p class="hint">Tap a recipe to import it into Miso — it'll be searchable (and filterable) offline next time.</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
-      : `<p class="empty">Nothing found on ${SEARCH.mode === "nyt" ? "NYT Cooking" : "EatingWell"}.</p>`;
+      ? `<p class="hint">${SEARCH.mode === "ytf" ? "Yummy Toddler Food only lets your own browser read its recipes: tap one to open it, then use your <b>Save to Miso</b> bookmark (Settings → Save recipes from any website)." : "Tap a recipe to import it into Miso — it'll be searchable (and filterable) offline next time."}</p><div class="results">${results.map((r) => card({ ...r, source: "web", snippet: r.time || "" })).join("")}</div>`
+      : `<p class="empty">Nothing found on ${esc(WEB_NAME[SEARCH.mode])}.</p>`;
     return bindCards(res, importUrl);
   }
   if (!val && !hasFilters()) { renderFilterBar(); return renderHome(res); }
@@ -209,7 +212,7 @@ async function runSearch() {
   FACETS = data.facets || {};
   renderFilterBar();
   const more = data.total > data.results.length;
-  res.innerHTML = `<div class="result-head"><b>${data.total.toLocaleString()}</b> ${data.total === 1 ? "recipe" : "recipes"}${SEARCH.mode === "all" && val ? " in your cookbooks & saved recipes · NYT Cooking and EatingWell below" : ""}</div>` + (data.results.length
+  res.innerHTML = `<div class="result-head"><b>${data.total.toLocaleString()}</b> ${data.total === 1 ? "recipe" : "recipes"}${SEARCH.mode === "all" && val ? " in your cookbooks & saved recipes · recipe sites below" : ""}</div>` + (data.results.length
     ? `<div class="results">${data.results.map((c) => card(c)).join("")}</div>${more ? `<p style="text-align:center;margin-top:18px"><button class="btn" id="more">Show more from your cookbooks (${(data.total - data.results.length).toLocaleString()})</button></p>` : ""}`
     : `<p class="empty">${SEARCH.mode === "all" && val ? "Nothing in your cookbooks matches." : "Nothing matches."}${hasFilters() ? ` <button class="link" id="clr2">Clear filters</button>` : ""}${val && SEARCH.mode !== "nyt" && SEARCH.mode !== "all" ? ` <button class="link" id="tryNyt">Try NYT Cooking →</button>` : ""}</p>`);
   if (SEARCH.mode === "all" && val) {
@@ -236,18 +239,25 @@ function liveWeb(val, seq) {
       return `<div class="section-title"><h2>From ${label}</h2><button data-see="${site}">See all ${r.length} →</button></div>
         <div class="results">${r.slice(0, 6).map((x) => card({ ...x, source: "web", snippet: x.time || "" })).join("")}</div>`;
     };
-    box.innerHTML = sec("nyt", "NYT Cooking") + sec("ew", "EatingWell")
+    box.innerHTML = WEB_SITES.map(([k, n]) => sec(k, n)).join("")
       + (hasFilters() ? `<p class="hint">Filters apply to your cookbooks and saved recipes. Tap a web recipe to save it, then it can be filtered too.</p>` : "");
     bindCards(box, importUrl);
     $$("[data-see]", box).forEach((b) => b.addEventListener("click", () => { SEARCH.mode = b.dataset.see; viewSearch(); }));
   };
   draw();
   webTimer = setTimeout(() => {
-    ["nyt", "ew"].forEach(async (site) => {
+    WEB_SITES.forEach(async ([site]) => {
       const key = site + "|" + val;
       if (WEB_CACHE[key] === undefined) {
-        try { WEB_CACHE[key] = (await api(`/api/web/search?site=${site}&q=${encodeURIComponent(val)}`)).results || []; }
-        catch (e) { WEB_CACHE[key] = []; }
+        let failed = false;
+        try {
+          const r = await api(`/api/web/search?site=${site}&q=${encodeURIComponent(val)}`);
+          WEB_CACHE[key] = r.results || [];
+          failed = !!r.error;
+        } catch (e) { WEB_CACHE[key] = []; failed = true; }
+        draw();
+        if (failed) delete WEB_CACHE[key];   // a site that timed out gets another try next search
+        return;
       }
       draw();
     });
