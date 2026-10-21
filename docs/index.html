@@ -130,7 +130,8 @@ section.block { padding-block: 56px; border-top: 1px solid var(--line); display:
 .block-head p { color: var(--ink-2); font-size: 1rem; }
 
 /* features */
-.features { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 32px; }
+.features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 28px; }
+@media (max-width: 1040px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 820px) { .features { grid-template-columns: 1fr; gap: 22px; } }
 .feature h3 { font-size: 1.25rem; margin-bottom: 8px; }
 .feature ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 7px; }
@@ -248,16 +249,17 @@ footer { padding-block: 36px 48px; border-top: 1px solid var(--line); color: var
   <section class="block">
     <div class="block-head">
       <span class="eyebrow">What it does</span>
-      <h2>Find a recipe, cook it, plan the week.</h2>
+      <h2>Find a recipe, cook it, plan the week, keep what you love.</h2>
     </div>
     <div class="features">
       <div class="feature">
         <h3>Find</h3>
         <ul>
           <li>Search every recipe by name, ingredient, cookbook or your own tags.</li>
-          <li>Filter by course, protein, diet, method, time and rating.</li>
+          <li>Filter by course, protein, diet, method, time and rating, across your cookbooks and the recipe sites.</li>
           <li>Air fryer, slow cooker, Instant Pot, sheet pan and freezer-friendly are detected for you.</li>
           <li>Leave out what you don't like: “without mushrooms, cilantro”.</li>
+          <li>Your most-used filters, like “★ 5 · 30 min or less”, are one tap away.</li>
         </ul>
       </div>
       <div class="feature">
@@ -266,16 +268,25 @@ footer { padding-block: 36px 48px; border-top: 1px solid var(--line); color: var
           <li>Cook mode keeps the screen awake and makes the text bigger.</li>
           <li>Check off ingredients and highlight the step you're on.</li>
           <li>Tap any time in a step to start a timer with an alarm.</li>
-          <li>Scale to half, double or triple; keep your own notes and star ratings.</li>
+          <li>Scale to half, double or triple.</li>
         </ul>
       </div>
       <div class="feature">
         <h3>Plan</h3>
         <ul>
-          <li>Drop recipes into a week view.</li>
+          <li>Pick a day on a calendar and add a recipe, or just write the meal: “Leftovers”, “Pizza night”, “Tacos at Grandma's”.</li>
+          <li>See the week at a glance, with breakfast, lunch, dinner and snacks.</li>
           <li>Add meals to Google Calendar, or export the week in one file.</li>
-          <li>Build a shopping list from a recipe or the whole week, sorted by store aisle.</li>
-          <li>Copy or share the list to Notes or Reminders.</li>
+          <li>Build a shopping list from a recipe or the whole week, sorted by store aisle, then copy or share it.</li>
+        </ul>
+      </div>
+      <div class="feature">
+        <h3>Keep</h3>
+        <ul>
+          <li>Star your favorites and find them, with everything you've saved from the web, in one Saved tab.</li>
+          <li>Rate recipes yourself and filter by your own stars.</li>
+          <li>Tag recipes your way: Kid-approved, Weeknight, Make again.</li>
+          <li>Add your own notes, and see how often you've cooked something.</li>
         </ul>
       </div>
     </div>
@@ -285,7 +296,7 @@ footer { padding-block: 36px 48px; border-top: 1px solid var(--line); color: var
     <div class="block-head">
       <span class="eyebrow">Search</span>
       <h2>Filters that know what's in the recipe.</h2>
-      <p>Miso reads each recipe and works out the course, main protein, diet, cooking method and roughly how long it takes. Try it on a few example recipes.</p>
+      <p>Miso reads each recipe and works out the course, main protein, diet, cooking method and roughly how long it takes. The same filters work on results from the recipe sites too. Try it on a few example recipes.</p>
     </div>
     <div class="search-demo">
       <div class="sbox">
@@ -308,8 +319,8 @@ footer { padding-block: 36px 48px; border-top: 1px solid var(--line); color: var
     <div class="sources">
       <div class="source"><b>Your ebook cookbooks</b><p>Point Miso at a folder of EPUB or MOBI files (Google Drive works). It learns each book's layout and pulls out every recipe, photo and cover.</p></div>
       <div class="source"><b>Tricky books too</b><p>Picture-heavy and scanned-looking cookbooks are read page by page with your Mac's built-in text recognition.</p></div>
-      <div class="source"><b>Favorite recipe sites</b><p>Search NYT Cooking, EatingWell, Love &amp; Lemons, Skinnytaste and Yummy Toddler Food from inside Miso, see their ratings, and save a recipe so it's searchable offline.</p></div>
-      <div class="source"><b>Any recipe link</b><p>Paste a link from most recipe sites and Miso imports the ingredients and steps.</p></div>
+      <div class="source"><b>Favorite recipe sites</b><p>Search NYT Cooking, EatingWell, Love &amp; Lemons, Skinnytaste and Yummy Toddler Food from inside Miso, filter their results, see their ratings, and save a recipe so it's searchable offline.</p></div>
+      <div class="source"><b>Any recipe link</b><p>Paste a link from most recipe sites, or use the Save to Miso bookmark on sites that don't let apps read their pages.</p></div>
     </div>
   </section>
 

@@ -947,10 +947,10 @@ function calendarHTML(selected, month) {
     </div>`;
 }
 
-function planModal(c, r, presetDate) {
+function planModal(c, r, presetDate, presetMeal) {
   let day = presetDate || ymd(new Date());
   let month = parseYmd(day); month.setDate(1);
-  let meal = "Dinner";
+  let meal = presetMeal || "Dinner";
   const dayLabel = () => parseYmd(day).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
   openModal(`
     <h2>Add to meal plan</h2><p class="sub">${esc(c.title)}</p>
@@ -999,7 +999,10 @@ function eventTimes(d, meal) {
   const f = (x) => `${x.getFullYear()}${pad(x.getMonth() + 1)}${pad(x.getDate())}T${pad(x.getHours())}${pad(x.getMinutes())}00`;
   return [f(start), f(end)];
 }
+// A plan entry is either a recipe ({card}) or a free-text meal ({text}, e.g. "Leftovers").
+const entryTitle = (e) => e.card ? e.card.title : e.text;
 function eventDetails(entry, r) {
+  if (!entry.card) return "Planned in Miso";
   const c = entry.card;
   const lines = [c.source === "book" ? `From the cookbook “${c.bookTitle}”` : `From ${c.site}${r?.url ? ": " + r.url : ""}`];
   if (r?.ingredients) lines.push("", "Ingredients:", ...r.ingredients.filter((i) => !i.h).map((i) => "• " + i.t));
@@ -1008,7 +1011,7 @@ function eventDetails(entry, r) {
 }
 function gcalUrl(d, entry, r) {
   const [s, e] = eventTimes(d, entry.meal);
-  const p = new URLSearchParams({ action: "TEMPLATE", text: `${entry.meal}: ${entry.card.title}`, dates: `${s}/${e}`, details: eventDetails(entry, r), ctz: Intl.DateTimeFormat().resolvedOptions().timeZone });
+  const p = new URLSearchParams({ action: "TEMPLATE", text: `${entry.meal}: ${entryTitle(entry)}`, dates: `${s}/${e}`, details: eventDetails(entry, r), ctz: Intl.DateTimeFormat().resolvedOptions().timeZone });
   return "https://calendar.google.com/calendar/render?" + p.toString();
 }
 async function fetchRecipe(id) { try { return await api("/api/recipe/" + encodeURIComponent(id)); } catch (e) { return null; } }
@@ -1032,9 +1035,9 @@ function viewPlan() {
       const meals = (S.plan[k] || []).slice().sort((a, b) => MEALS.indexOf(a.meal) - MEALS.indexOf(b.meal));
       return `<div class="day ${k === today ? "today" : ""}">
         <header><b>${d.toLocaleDateString(undefined, { weekday: "short" })}</b><span>${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</span></header>
-        ${meals.map((m) => `<div class="meal">
-          ${m.card.image ? `<img src="${esc(m.card.image)}" alt="">` : m.card.source === "book" ? coverImg(m.card) : ""}
-          <div><small>${m.meal}</small><a href="#/r/${encodeURIComponent(m.card.id)}">${esc(m.card.title)}</a>
+        ${meals.map((m) => `<div class="meal ${m.card ? "" : "free"}">
+          ${!m.card ? `<span class="free-ic" aria-hidden="true">${esc((m.text || "?").trim()[0].toUpperCase())}</span>` : m.card.image ? `<img src="${esc(m.card.image)}" alt="">` : m.card.source === "book" ? coverImg(m.card) : ""}
+          <div><small>${m.meal}</small>${m.card ? `<a href="#/r/${encodeURIComponent(m.card.id)}">${esc(m.card.title)}</a>` : `<span class="free-t">${esc(m.text)}</span>`}
           <div class="acts"><button data-g="${k}|${m.id}" title="Add to Google Calendar">${ICON.cal}</button><button data-rm="${k}|${m.id}" title="Remove from plan">${ICON.x}</button></div></div></div>`).join("")}
         <button class="add" data-add="${k}">+ Add a meal</button></div>`;
     }).join("")}</div>`;
@@ -1047,31 +1050,54 @@ function viewPlan() {
     const [d, id] = b.dataset.g.split("|");
     const entry = S.plan[d].find((m) => m.id === id);
     const w = window.open("about:blank", "_blank");   // open synchronously so popup blockers allow it
-    const r = await fetchRecipe(entry.card.id);
+    const r = entry.card ? await fetchRecipe(entry.card.id) : null;
     w.location = gcalUrl(d, entry, r);
   });
   $$("[data-add]").forEach((b) => b.onclick = () => pickRecipeModal(b.dataset.add));
   $("#wl").onclick = async () => {
-    const entries = days.flatMap((d) => S.plan[ymd(d)] || []);
+    const entries = days.flatMap((d) => S.plan[ymd(d)] || []).filter((e) => e.card);   // free-text meals have no ingredients
+    if (!entries.length) { toast("No recipes planned this week — only free-text meals"); return; }
     const recipes = (await Promise.all(entries.map((e) => fetchRecipe(e.card.id)))).filter((r) => r && !r.error);
     addToListModal(recipes.map((r) => ({ r, scale: 1 })));
   };
   $("#wi").onclick = () => exportIcs(days);
 }
 
+const FREE_MEALS = ["Leftovers", "Takeout", "Eat out", "Pizza night", "Breakfast for dinner", "Fend for yourself"];
 function pickRecipeModal(date) {
+  let meal = "Dinner";
   openModal(`<h2>Add a meal</h2><p class="sub">${parseYmd(date).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</p>
-    <input type="text" id="pq" placeholder="Search your recipes" autofocus>
-    <div class="mini-results" id="pr"></div>`, (m) => {
-    const show = (list) => {
-      $("#pr").innerHTML = list.slice(0, 12).map((c) => card(c)).join("") || `<p class="empty">No matches</p>`;
-      $$("#pr .card").forEach((el, i) => el.onclick = () => { closeModal(); planModal(list[i], null, date); });
+    <div class="seg" id="fm" role="group" aria-label="Meal">${MEALS.map((m) => `<button type="button" data-meal="${m}" aria-pressed="${m === meal}">${m}</button>`).join("")}</div>
+    <label for="pq">Pick a recipe, or write any meal</label>
+    <input type="text" id="pq" placeholder="Search recipes, or type e.g. Tacos at Grandma's" autocomplete="off" autofocus>
+    <div class="chips" id="fq" style="justify-content:flex-start;margin:8px 0 0">${FREE_MEALS.map((t) => `<button type="button" class="chip" data-free="${esc(t)}">${esc(t)}</button>`).join("")}</div>
+    <div class="mini-results" id="pr"></div>`, () => {
+    const addFree = (text) => {
+      text = text.trim();
+      if (!text) return;
+      (S.plan[date] = S.plan[date] || []).push({ id: uid(), meal, text });
+      commit(); closeModal();
+      toast(`${meal}: ${text}`);
+      if (location.hash === "#/plan") viewPlan();
     };
-    show([...S.favorites.slice().reverse(), ...S.recent].filter((c, i, a) => a.findIndex((x) => x.id === c.id) === i));
+    $$("#fm button").forEach((b) => b.addEventListener("click", () => {
+      meal = b.dataset.meal;
+      $$("#fm button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+    }));
+    $$("[data-free]").forEach((b) => b.addEventListener("click", () => addFree(b.dataset.free)));
+    const show = (list, typed) => {
+      const free = typed ? `<button type="button" class="card free-add" id="addTyped">${ICON.cal}<div class="body"><h3>Add “${esc(typed)}”</h3><div class="src">as ${meal.toLowerCase()}, no recipe</div></div></button>` : "";
+      $("#pr").innerHTML = free + (list.slice(0, 12).map((c) => card(c)).join("") || (typed ? "" : `<p class="empty">No matches</p>`));
+      $("#addTyped")?.addEventListener("click", () => addFree(typed));
+      $$("#pr .card:not(.free-add)").forEach((el, i) => el.onclick = () => { closeModal(); planModal(list[i], null, date, meal); });
+    };
+    show([...S.favorites.slice().reverse(), ...S.recent].filter((c, i, a) => a.findIndex((x) => x.id === c.id) === i), "");
+    $("#pq").addEventListener("keydown", (e) => { if (e.key === "Enter") addFree(e.target.value); });
     $("#pq").addEventListener("input", debounce(async (e) => {
-      if (!e.target.value.trim()) return;
-      const { results } = await api(`/api/search?q=${encodeURIComponent(e.target.value)}`);
-      show(results);
+      const typed = e.target.value.trim();
+      if (!typed) return show([...S.favorites.slice().reverse(), ...S.recent].filter((c, i, a) => a.findIndex((x) => x.id === c.id) === i), "");
+      const { results } = await api(`/api/search?q=${encodeURIComponent(typed)}`);
+      if ($("#pq")?.value.trim() === typed) show(results, typed);
     }, 180));
   });
 }
@@ -1082,10 +1108,10 @@ async function exportIcs(days) {
   const out = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Miso//Meal Plan//EN", "CALSCALE:GREGORIAN"];
   for (const d of days) {
     for (const entry of S.plan[ymd(d)] || []) {
-      const r = await fetchRecipe(entry.card.id);
+      const r = entry.card ? await fetchRecipe(entry.card.id) : null;
       const [s, e] = eventTimes(ymd(d), entry.meal);
       out.push("BEGIN:VEVENT", `UID:${entry.id}@miso`, `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, "").split(".")[0]}Z`,
-        `DTSTART:${s}`, `DTEND:${e}`, fold(`SUMMARY:${icsEsc(`${entry.meal}: ${entry.card.title}`)}`),
+        `DTSTART:${s}`, `DTEND:${e}`, fold(`SUMMARY:${icsEsc(`${entry.meal}: ${entryTitle(entry)}`)}`),
         fold(`DESCRIPTION:${icsEsc(eventDetails(entry, r))}`), "END:VEVENT");
     }
   }

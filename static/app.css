@@ -358,3 +358,10 @@ dialog::backdrop { background: rgba(20, 18, 15, .45); }
 .chip.usual .forget { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; color: var(--ink-3); }
 .chip.usual .forget:hover { background: var(--sunk); color: var(--ink); }
 .chip.usual .forget svg { width: 11px; height: 11px; }
+
+/* free-text meals in the plan */
+.meal.free { background: color-mix(in srgb, var(--accent) 8%, var(--sunk)); }
+.free-ic { width: 30px; height: 30px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 600 .85rem var(--serif); background: var(--accent-soft); color: var(--accent); }
+.free-t { font: 500 .88rem/1.25 var(--serif); display: block; }
+.card.free-add { border-style: dashed; align-items: center; }
+.card.free-add svg { flex: none; color: var(--accent); margin: 0 6px; }

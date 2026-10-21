@@ -15,8 +15,10 @@
 - **Timers:** tap any time in a step (for example "⏱ 20 minutes") to start a countdown with an alarm.
 - **Scale** any recipe to ½×, 2× or 3×.
 - **Shopping list:** builds from one recipe or your whole week. Items are grouped by store aisle, and salt, pepper and oil are unchecked by default. Use Copy or Share to send it to Notes or Reminders.
-- **Meal plan:** a week view. Each meal has a "+ Google Calendar" button, and you can export the whole week as an `.ics` file.
-- **My notes** and a **Cooked ×N** log on every recipe.
+- **Meal plan:** a week view. Pick a day on a calendar and add a recipe, or just write the meal ("Leftovers", "Pizza night"). Each meal has a "+ Google Calendar" button, and you can export the whole week as an `.ics` file.
+- **Saved:** your ★ Favorites and every recipe you've saved from a website, in one tab.
+- **Your usual filters:** the filter combinations you use most show up under Browse.
+- **My notes**, your own **star ratings**, and a **Cooked ×N** log on every recipe.
 
 ## Where things live
 - `config.json` lists the folders that get scanned. Books are read straight from Google Drive for Desktop (`GoogleDrive-*` covers every signed-in account). Edit it, then use Settings → "Rescan for new books".
